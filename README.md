@@ -36,7 +36,7 @@ npx eas build:configure
 npx eas build --platform android --profile preview
 ```
 
-`preview` 通常用于测试安装包，发布时再按 EAS 配置生成 AAB。当前仓库的 GitHub Actions 预览工作流已经改为完全绕过 EAS：它在 GitHub Ubuntu runner 上执行 Expo prebuild、Gradle `assembleDebug`，并将 `app-debug.apk` 上传为 GitHub Actions Artifact。这样不会消耗 Expo/EAS 的 Android 构建额度。
+`preview` 通常用于测试安装包，发布时再按 EAS 配置生成 AAB。当前仓库的 GitHub Actions 预览工作流已经改为完全绕过 EAS：它在 GitHub Ubuntu runner 上执行 Expo prebuild、Gradle `assembleRelease`，把 JavaScript bundle 内置进 Release APK，并上传为 GitHub Actions Artifact。这样不会消耗 Expo/EAS 的 Android 构建额度，也不需要连接 Metro。
 
 ## GitHub Actions 直接构建 APK
 
@@ -46,9 +46,9 @@ npx eas build --platform android --profile preview
 https://speakwise-wsicpu2u.manus.space
 ```
 
-该工作流不需要 `EXPO_TOKEN`，也不需要 Expo 登录。执行顺序为：安装 pnpm 依赖、执行 Expo prebuild、运行 TypeScript/Vitest/Jest 校验、执行 `android/gradlew assembleDebug`，最后上传 `speakwise-android-debug-apk` Artifact。工作流运行完成后，进入本次 run 的 **Summary → Artifacts** 下载 APK；Artifact 默认保留 14 天。
+该工作流不需要 `EXPO_TOKEN`，也不需要 Expo 登录。执行顺序为：安装 pnpm 依赖、执行 Expo prebuild、运行 TypeScript/Vitest/Jest 校验、执行 `android/gradlew assembleRelease`，最后上传 `speakwise-android-release-apk` Artifact。工作流运行完成后，进入本次 run 的 **Summary → Artifacts** 下载 APK；Artifact 默认保留 14 天。
 
-该 APK 是用于测试安装的 Debug APK，不是 Google Play 发布用的 AAB。若以后需要正式发布，仍可使用 EAS production profile 或配置正式 Android 签名流程。
+该 APK 是用于测试安装的 Release APK，已经内置 JavaScript bundle，不需要 Metro；它仍不是 Google Play 发布用的 AAB。当前 Release 变体使用 Expo prebuild 生成的 debug signing fallback，仅适合内部测试。若以后需要正式发布，仍需配置正式 Android signing keystore 和 AAB 流程。
 
 ## 验证
 

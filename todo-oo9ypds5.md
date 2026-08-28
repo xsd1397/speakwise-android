@@ -13,3 +13,4 @@
 - [x] 为 Android 首版补充组件/渲染测试，覆盖首页场景选择、录音状态切换、AI 对话发送/错误态、返回顶部、听力播放速度与声线回退（9 项 Jest 组件测试通过）
 - [ ] 手动补充动态 app.config.ts 的 extra.eas.projectId，并验证新 EAS 项目关联后构建 APK（当前仅配置解析验证通过；需在已登录的本机继续执行 EAS 关联与构建）
 - [x] 将 GitHub Actions 改为绕过 EAS、在 GitHub runner 上执行 Expo prebuild/Gradle 并上传 Debug APK（本地 Expo prebuild 与配置检查通过；实际 GitHub runner 构建需用户触发）
+- [ ] 修复 GitHub APK 无法离线加载 JavaScript bundle：已改用内置 bundle 的 Release APK；待用户重新运行 GitHub Actions 并完成手机安装验证
