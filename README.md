@@ -1,0 +1,62 @@
+# SpeakWise Android
+
+SpeakWise Android 是现有 SpeakWise 网页端的独立 Expo React Native 客户端。它不使用 WebView，而是使用 Android 原生组件重建口语练习、真实录音、AI 对话、听力训练和学习进度入口。
+
+## 本地运行
+
+```bash
+pnpm install
+cp environment.template .env
+pnpm start
+```
+
+启动后可使用 Expo CLI 连接 Android 模拟器或真机。录音功能必须在 Android 真机或配置了麦克风的模拟器中测试，并且首次使用时要授予麦克风权限。
+
+## 后端地址
+
+在 `.env` 中设置：
+
+```bash
+EXPO_PUBLIC_API_BASE_URL=https://your-speakwise-domain.example
+```
+
+客户端会调用现有 SpeakWise 的 `dialogue.reply`、`voice.transcribe` 和 `voice.evaluate` tRPC 路由。不要把数据库连接串、JWT secret、OAuth secret 或服务端 API key 放入移动端环境变量；移动端环境变量会进入客户端包，只能放公开 API 地址或公开配置。
+
+## Android 首版范围
+
+当前首版包含：级别和场景选择、目标句播放、Alex/Mia 对话、真实录音权限和录音控制、真实录音上传与严格评分结果、AI 对话整句语音、听力 40 句、0.75×/1×/1.25×播放速度、Alex 男声/Mia 女声优先和系统默认声音回退、学习进度空状态以及返回顶部交互。
+
+## 构建 APK/AAB
+
+GitHub 用于代码托管和 Actions 自动化，不能单独把网页代码转换成 APK。推荐流程是将本目录推送到独立 GitHub 仓库，再使用 Expo/EAS：
+
+```bash
+npx eas login
+npx eas build:configure
+npx eas build --platform android --profile preview
+```
+
+`preview` 通常用于测试安装包，发布时再按 EAS 配置生成 AAB。当前仓库的 GitHub Actions 预览工作流已经改为完全绕过 EAS：它在 GitHub Ubuntu runner 上执行 Expo prebuild、Gradle `assembleDebug`，并将 `app-debug.apk` 上传为 GitHub Actions Artifact。这样不会消耗 Expo/EAS 的 Android 构建额度。
+
+## GitHub Actions 直接构建 APK
+
+将本目录推送到 GitHub 后，打开 **Actions → Android preview APK (GitHub runner) → Run workflow**，在 `api_base_url` 输入公开 SpeakWise API origin，例如：
+
+```text
+https://speakwise-wsicpu2u.manus.space
+```
+
+该工作流不需要 `EXPO_TOKEN`，也不需要 Expo 登录。执行顺序为：安装 pnpm 依赖、执行 Expo prebuild、运行 TypeScript/Vitest/Jest 校验、执行 `android/gradlew assembleDebug`，最后上传 `speakwise-android-debug-apk` Artifact。工作流运行完成后，进入本次 run 的 **Summary → Artifacts** 下载 APK；Artifact 默认保留 14 天。
+
+该 APK 是用于测试安装的 Debug APK，不是 Google Play 发布用的 AAB。若以后需要正式发布，仍可使用 EAS production profile 或配置正式 Android 签名流程。
+
+## 验证
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm test:components
+npx expo export --platform web
+```
+
+当前开发阶段优先保证 TypeScript、纯函数和组件测试可重复；Android 原生 APK/AAB 使用 EAS 云构建。当前沙箱没有 Android SDK，因此本地 Gradle APK 编译需在开发机或 EAS runner 上完成；最终仍需要在 Android 真机上验证麦克风权限、录音文件上传、TTS 中断恢复和系统声线回退。

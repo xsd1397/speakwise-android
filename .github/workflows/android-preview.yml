@@ -1,0 +1,66 @@
+name: Android preview APK (GitHub runner)
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Public SpeakWise API origin"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build debug APK without EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_API_BASE_URL: ${{ inputs.api_base_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate native Android project
+        env:
+          CI: "1"
+        run: pnpm exec expo prebuild --platform android --no-install
+
+      - name: Validate TypeScript and tests
+        run: pnpm typecheck && pnpm test && pnpm test:components
+
+      - name: Build debug APK with Gradle
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: speakwise-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
