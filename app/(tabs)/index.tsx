@@ -47,6 +47,7 @@ export default function PracticeScreen() {
   const target = lines[0];
   useEffect(() => { setDialogue([{ role: "assistant", text: target.text }]); setTranslated({}); setAiRecordingMessage("可输入中文，发送前会自动转换为自然英文表达"); }, [scene, level, target.text]);
   useEffect(() => { Speech.getAvailableVoicesAsync().then(setVoices).catch(() => setVoices([])); return () => { Speech.stop?.(); }; }, []);
+  useEffect(() => { if (!selectedWord) return; const timer = setTimeout(() => setSelectedWord(null), 5000); return () => clearTimeout(timer); }, [selectedWord]);
   const speak = (text: string, speaker: Speaker = "Alex") => { Speech.stop(); const selection = selectVoiceForSpeaker(voices, voiceSpeaker(speaker)); const options: Speech.SpeechOptions = { language: "en-US", rate: getSpeechRate(level === "beginner" ? .9 : level === "advanced" ? 1.05 : 1), onError: () => setReplyError("系统语音暂时不可用，请检查 Android 语音服务设置。") }; if (selection.voice?.identifier) options.voice = selection.voice.identifier; Speech.speak(text, options); };
   const toggleRecording = async (line = target) => {
     setRecordingError(null); setEvaluation(null);

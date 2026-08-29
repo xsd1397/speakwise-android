@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Speech from "expo-speech";
 import { ScreenContainer } from "@/components/ScreenContainer";
@@ -8,6 +8,7 @@ export default function ProgressScreen() {
   const listRef = useRef<FlatList>(null);
   const { words } = useWordbook();
   const [selected, setSelected] = useState<typeof words[number] | null>(null);
+  useEffect(() => { if (!selected) return; const timer = setTimeout(() => setSelected(null), 5000); return () => clearTimeout(timer); }, [selected]);
   return <ScreenContainer><FlatList ref={listRef} data={[]} renderItem={null} contentContainerStyle={styles.content} ListHeaderComponent={<View>
     <View style={styles.headerRow}><View><Text style={styles.brand}>SpeakWise</Text><Text style={styles.kicker}>我的学习进度</Text></View><View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View></View>
     <Text style={styles.title}>稳步进步，持续开口。</Text><Text style={styles.subtitle}>这里会记录你的真实练习结果和收藏的生词。</Text>
