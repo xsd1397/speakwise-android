@@ -446,9 +446,40 @@ export const SCENE_CONTENT: Record<SceneKey, ListeningLine[]> = {
   ],
 };
 
+const GREETINGS_BY_LEVEL: Record<LevelKey, PracticeLine[]> = {
+  beginner: SCENE_CONTENT.greetings.slice(0, 10),
+  intermediate: [
+    { id: "greetings-intermediate-1", speaker: "Jamie", text: "It's been a while. How have you been?", translation: "好久不见。你最近过得怎么样？", note: "用 How have you been? 自然询问近况。" },
+    { id: "greetings-intermediate-2", speaker: "Taylor", text: "I've been doing well, just very busy with work.", translation: "我过得不错，只是工作非常忙。", note: "用 I've been doing well 分享持续到现在的状态。" },
+    { id: "greetings-intermediate-3", speaker: "Jamie", text: "I know the feeling. We should catch up soon.", translation: "我懂这种感觉。我们应该很快找时间叙叙旧。", note: "catch up 表示叙旧、了解近况。" },
+    { id: "greetings-intermediate-4", speaker: "Taylor", text: "Definitely. Are you free this weekend?", translation: "当然。你这周末有空吗？", note: "用 Are you free? 询问时间安排。" },
+    { id: "greetings-intermediate-5", speaker: "Jamie", text: "Saturday afternoon works perfectly for me.", translation: "周六下午对我来说正合适。", note: "works perfectly 表示时间安排很合适。" },
+    { id: "greetings-intermediate-6", speaker: "Taylor", text: "Great! Let's meet at that new cafe downtown.", translation: "太好了！我们就在市中心那家新咖啡馆见吧。", note: "Let's meet at... 提出自然的见面建议。" },
+    { id: "greetings-intermediate-7", speaker: "Jamie", text: "I've heard great things about their coffee.", translation: "我听说他们家的咖啡很棒。", note: "I've heard great things about... 表达听闻和推荐。" },
+    { id: "greetings-intermediate-8", speaker: "Taylor", text: "You won't be disappointed. Shall we say around 2 PM?", translation: "你不会失望的。那就下午两点左右，怎么样？", note: "Shall we say...? 用于委婉确认约定时间。" },
+    { id: "greetings-intermediate-9", speaker: "Jamie", text: "Two o'clock sounds ideal. See you then!", translation: "两点听起来很合适。到时见！", note: "sounds ideal 表示认可安排。" },
+    { id: "greetings-intermediate-10", speaker: "Taylor", text: "Looking forward to it. Have a productive week!", translation: "期待见面。祝你这周工作顺利！", note: "Looking forward to it 表示期待即将发生的事情。" },
+  ],
+  advanced: [
+    { id: "greetings-advanced-1", speaker: "Jordan", text: "What have you been enjoying lately?", translation: "你最近一直在享受什么活动？", note: "现在完成进行时用于询问近期持续的兴趣。" },
+    { id: "greetings-advanced-2", speaker: "Riley", text: "I've been taking a photography class after work.", translation: "我最近下班后一直在上摄影课。", note: "用 I've been taking 表达近期持续的活动。" },
+    { id: "greetings-advanced-3", speaker: "Jordan", text: "That sounds fascinating. What kind of subjects do you focus on?", translation: "听起来很有意思。你主要拍摄什么主题？", note: "What kind of subjects do you focus on? 用于深入追问兴趣。" },
+    { id: "greetings-advanced-4", speaker: "Riley", text: "Mostly street photography and architecture in the city.", translation: "主要是城市街拍和建筑摄影。", note: "Mostly 用来概括主要方向。" },
+    { id: "greetings-advanced-5", speaker: "Jordan", text: "Capturing urban life requires great timing and patience.", translation: "捕捉城市生活需要很好的时机和耐心。", note: "动名词作主语，适合表达观点。" },
+    { id: "greetings-advanced-6", speaker: "Riley", text: "It really does. You notice details you usually walk past.", translation: "确实如此。你会注意到平时路过时忽略的细节。", note: "It really does 用于强调认同前一句观点。" },
+    { id: "greetings-advanced-7", speaker: "Jordan", text: "Have you considered exhibiting any of your work?", translation: "你考虑过展出自己的作品吗？", note: "Have you considered...? 用于提出深思熟虑的建议。" },
+    { id: "greetings-advanced-8", speaker: "Riley", text: "Maybe in a local gallery once I build a stronger portfolio.", translation: "也许等我的作品集更成熟后，会在本地画廊展出。", note: "once 引导未来条件，表达计划。" },
+    { id: "greetings-advanced-9", speaker: "Jordan", text: "I'm sure people would love your perspective.", translation: "我相信大家会喜欢你的视角。", note: "I'm sure... would... 表达有根据的积极判断。" },
+    { id: "greetings-advanced-10", speaker: "Riley", text: "Thank you for the encouragement. I appreciate it!", translation: "谢谢你的鼓励。我很感激！", note: "I appreciate it 礼貌回应对方的支持。" },
+  ],
+};
 export function getSceneLabel(scene: string) { return SCENES.find((item) => item.key === scene)?.title ?? "日常问候"; }
 export function getLevelLabel(level: LevelKey) { return LEVELS.find((item) => item.key === level)?.title ?? "初级"; }
 export function getSceneLines(scene: SceneKey) { return SCENE_CONTENT[scene]; }
-export function getPracticeDialogue(scene: SceneKey) { return SCENE_CONTENT[scene].slice(0, 10); }
+export function getPracticeDialogue(scene: SceneKey, level: LevelKey = "beginner") {
+  if (scene === "greetings") return GREETINGS_BY_LEVEL[level];
+  const offset = level === "beginner" ? 0 : level === "intermediate" ? 10 : 20;
+  return SCENE_CONTENT[scene].slice(offset, offset + 10);
+}
 export const PRACTICE_DIALOGUE = getPracticeDialogue("greetings");
 export const LISTENING_LINES = SCENE_CONTENT.greetings;

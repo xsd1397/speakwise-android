@@ -1,65 +1,23 @@
-import { useRef } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-
+import { useRef, useState } from "react";
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import * as Speech from "expo-speech";
 import { ScreenContainer } from "@/components/ScreenContainer";
-
-const progressCards = [
-  { label: "已完成对话", value: "—", hint: "完成真实练习后显示" },
-  { label: "平均准确率", value: "—", hint: "完成录音评分后显示" },
-  { label: "生词本", value: "—", hint: "收藏单词后显示" },
-];
+import { useWordbook } from "@/lib/wordbook";
 
 export default function ProgressScreen() {
   const listRef = useRef<FlatList>(null);
-  return (
-    <ScreenContainer>
-      <FlatList
-        ref={listRef}
-        data={[]}
-        renderItem={null}
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={(
-          <View>
-            <View style={styles.headerRow}>
-              <View><Text style={styles.brand}>SpeakWise</Text><Text style={styles.kicker}>我的学习进度</Text></View>
-              <View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View>
-            </View>
-            <Text style={styles.title}>稳步进步，持续开口。</Text>
-            <Text style={styles.subtitle}>这里会记录你的真实练习结果，不用模拟数字填充。</Text>
-            <View style={styles.cardGrid}>
-              {progressCards.map((card) => <View key={card.label} style={styles.progressCard}><Text style={styles.progressValue}>{card.value}</Text><Text style={styles.progressLabel}>{card.label}</Text><Text style={styles.progressHint}>{card.hint}</Text></View>)}
-            </View>
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyIcon}>◌</Text>
-              <Text style={styles.emptyTitle}>完成一次真实练习后，这里会出现你的进度</Text>
-              <Text style={styles.emptyText}>SpeakWise 不会预填或伪造评分、学习时长和用户数据。</Text>
-            </View>
-            <Pressable onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })} style={styles.backTop} accessibilityRole="button" accessibilityLabel="返回页面顶部"><Text style={styles.backTopText}>↑ 返回顶部</Text></Pressable>
-          </View>
-        )}
-      />
-    </ScreenContainer>
-  );
+  const { words } = useWordbook();
+  const [selected, setSelected] = useState<typeof words[number] | null>(null);
+  return <ScreenContainer><FlatList ref={listRef} data={[]} renderItem={null} contentContainerStyle={styles.content} ListHeaderComponent={<View>
+    <View style={styles.headerRow}><View><Text style={styles.brand}>SpeakWise</Text><Text style={styles.kicker}>我的学习进度</Text></View><View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View></View>
+    <Text style={styles.title}>稳步进步，持续开口。</Text><Text style={styles.subtitle}>这里会记录你的真实练习结果和收藏的生词。</Text>
+    <View style={styles.cardGrid}><Stat value="—" label="已完成对话" hint="完成真实练习后显示"/><Stat value={`${words.length}`} label="生词本" hint="收藏单词后显示"/><Stat value="—" label="平均准确率" hint="完成评分后显示"/></View>
+    <View style={styles.wordbook}><View style={styles.wordbookHeader}><View><Text style={styles.sectionTitle}>生词本</Text><Text style={styles.sectionHint}>点击任意单词，居中查看完整信息</Text></View><Text style={styles.wordCount}>{words.length} 个单词</Text></View>{words.length === 0 ? <View style={styles.empty}><Text style={styles.emptyIcon}>Aa</Text><Text style={styles.emptyTitle}>生词本还是空的</Text><Text style={styles.emptyText}>在口语或听力句子中点击单词，再选择“加入生词本”。</Text></View> : <View style={styles.wordGrid}>{words.map((word) => <Pressable key={word.word} onPress={() => setSelected(word)} style={styles.wordTile}><Text style={styles.wordText}>{word.word}</Text><Text style={styles.wordPhonetic}>{word.phonetic}</Text><Text style={styles.wordMeaning}>{word.meaning}</Text><Text style={styles.wordScene}>{word.scene}</Text></Pressable>)}</View>}</View>
+    <View style={styles.emptyCard}><Text style={styles.emptyIcon}>◌</Text><Text style={styles.emptyTitle}>完成一次真实练习后，这里会出现你的进度</Text><Text style={styles.emptyText}>SpeakWise 不会预填或伪造评分、学习时长和用户数据。</Text></View>
+    <Pressable onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })} style={styles.backTop} accessibilityRole="button" accessibilityLabel="返回页面顶部"><Text style={styles.backTopText}>↑ 返回顶部</Text></Pressable>
+  </View>} />
+  <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => setSelected(null)}><Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}><View style={styles.modalCard}><Text style={styles.modalEyebrow}>生词 · {selected?.scene}</Text><Text style={styles.modalWord}>{selected?.word}</Text><Text style={styles.modalPhonetic}>{selected?.phonetic}</Text><Text style={styles.modalMeaning}>{selected?.meaning}</Text><Text style={styles.exampleLabel}>场景例句</Text><Text style={styles.example}>{selected?.example}</Text><Pressable style={styles.speakButton} onPress={() => selected && Speech.speak(selected.word, { language: "en-US" })}><Text style={styles.speakText}>▶ 语音朗读</Text></Pressable><Pressable onPress={() => setSelected(null)}><Text style={styles.closeText}>关闭</Text></Pressable></View></Pressable></Modal>
+  </ScreenContainer>;
 }
-
-const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 30 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { color: "#F2F3F5", fontSize: 23, fontWeight: "800" },
-  kicker: { color: "#9AA2B4", fontSize: 12, marginTop: 3 },
-  avatar: { width: 38, height: 38, borderRadius: 20, backgroundColor: "#162A57", alignItems: "center", justifyContent: "center" },
-  avatarText: { color: "#8DB0FF", fontSize: 16, fontWeight: "900" },
-  title: { color: "#F2F3F5", fontSize: 32, lineHeight: 39, fontWeight: "900", marginTop: 28, letterSpacing: -0.8 },
-  subtitle: { color: "#9AA2B4", fontSize: 14, lineHeight: 21, marginTop: 8 },
-  cardGrid: { flexDirection: "row", gap: 8, marginTop: 20 },
-  progressCard: { flex: 1, backgroundColor: "#111317", borderRadius: 14, borderWidth: 1, borderColor: "#3A3D45", padding: 11, minHeight: 112 },
-  progressValue: { color: "#8DB0FF", fontSize: 24, fontWeight: "900" },
-  progressLabel: { color: "#D4D7DE", fontSize: 11, fontWeight: "800", marginTop: 7 },
-  progressHint: { color: "#9AA2B4", fontSize: 9, lineHeight: 13, marginTop: 5 },
-  emptyCard: { alignItems: "center", backgroundColor: "#111317", borderRadius: 18, borderWidth: 1, borderColor: "#3A3D45", padding: 25, marginTop: 15 },
-  emptyIcon: { color: "#7DA9E9", fontSize: 37 },
-  emptyTitle: { color: "#3C4F6B", textAlign: "center", fontSize: 14, lineHeight: 21, fontWeight: "800", marginTop: 10 },
-  emptyText: { color: "#9AA2B4", textAlign: "center", fontSize: 11, lineHeight: 18, marginTop: 8 },
-  backTop: { alignSelf: "center", marginTop: 22, borderRadius: 20, borderWidth: 1, borderColor: "#3A3D45", backgroundColor: "#111317", paddingHorizontal: 16, paddingVertical: 10 },
-  backTopText: { color: "#9DB9FF", fontSize: 12, fontWeight: "800" },
-});
+function Stat({ value, label, hint }: { value: string; label: string; hint: string }) { return <View style={styles.progressCard}><Text style={styles.progressValue}>{value}</Text><Text style={styles.progressLabel}>{label}</Text><Text style={styles.progressHint}>{hint}</Text></View>; }
+const styles = StyleSheet.create({ content: { padding: 20, paddingBottom: 30 }, headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, brand: { color: "#F2F3F5", fontSize: 23, fontWeight: "800" }, kicker: { color: "#9AA2B4", fontSize: 12, marginTop: 3 }, avatar: { width: 38, height: 38, borderRadius: 20, backgroundColor: "#162A57", alignItems: "center", justifyContent: "center" }, avatarText: { color: "#8DB0FF", fontSize: 16, fontWeight: "900" }, title: { color: "#F2F3F5", fontSize: 32, lineHeight: 39, fontWeight: "900", marginTop: 28, letterSpacing: -0.8 }, subtitle: { color: "#9AA2B4", fontSize: 14, lineHeight: 21, marginTop: 8 }, cardGrid: { flexDirection: "row", gap: 8, marginTop: 20 }, progressCard: { flex: 1, backgroundColor: "#111317", borderRadius: 14, borderWidth: 1, borderColor: "#3A3D45", padding: 11, minHeight: 112 }, progressValue: { color: "#8DB0FF", fontSize: 24, fontWeight: "900" }, progressLabel: { color: "#D4D7DE", fontSize: 11, fontWeight: "800", marginTop: 7 }, progressHint: { color: "#9AA2B4", fontSize: 9, lineHeight: 13, marginTop: 5 }, wordbook: { backgroundColor: "#111317", borderRadius: 18, borderWidth: 1, borderColor: "#3A3D45", padding: 16, marginTop: 16 }, wordbookHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, sectionTitle: { color: "#F2F3F5", fontSize: 20, fontWeight: "900" }, sectionHint: { color: "#9AA2B4", fontSize: 11, marginTop: 4 }, wordCount: { color: "#8DB0FF", fontWeight: "900" }, wordGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 16 }, wordTile: { width: "48%", backgroundColor: "#171A21", borderRadius: 13, borderWidth: 1, borderColor: "#3A3D45", padding: 12 }, wordText: { color: "#F2F3F5", fontSize: 19, fontWeight: "900" }, wordPhonetic: { color: "#8DB0FF", marginTop: 4 }, wordMeaning: { color: "#D4D7DE", marginTop: 4 }, wordScene: { color: "#9AA2B4", fontSize: 10, marginTop: 8 }, empty: { alignItems: "center", padding: 24 }, emptyIcon: { color: "#7DA9E9", fontSize: 35 }, emptyTitle: { color: "#D4D7DE", textAlign: "center", fontSize: 14, fontWeight: "800", marginTop: 8 }, emptyText: { color: "#9AA2B4", textAlign: "center", fontSize: 11, lineHeight: 18, marginTop: 7 }, emptyCard: { alignItems: "center", backgroundColor: "#111317", borderRadius: 18, borderWidth: 1, borderColor: "#3A3D45", padding: 25, marginTop: 15 }, backTop: { alignSelf: "center", marginTop: 22, borderRadius: 20, borderWidth: 1, borderColor: "#3A3D45", backgroundColor: "#111317", paddingHorizontal: 16, paddingVertical: 10 }, backTopText: { color: "#9DB9FF", fontSize: 12, fontWeight: "800" }, modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.78)", alignItems: "center", justifyContent: "center", padding: 22 }, modalCard: { width: "100%", maxWidth: 390, backgroundColor: "#151820", borderWidth: 1, borderColor: "#6A95FF", borderRadius: 24, padding: 24 }, modalEyebrow: { color: "#9AA2B4", fontSize: 12 }, modalWord: { color: "#F2F3F5", fontSize: 40, fontWeight: "900", marginTop: 12 }, modalPhonetic: { color: "#8DB0FF", fontSize: 21, marginTop: 6 }, modalMeaning: { color: "#F2F3F5", fontSize: 18, marginTop: 10 }, exampleLabel: { color: "#9AA2B4", fontSize: 12, marginTop: 24 }, example: { color: "#D4D7DE", fontSize: 16, lineHeight: 25, marginTop: 7 }, speakButton: { backgroundColor: "#2F6BEB", borderRadius: 11, padding: 13, alignItems: "center", marginTop: 22 }, speakText: { color: "#FFF", fontWeight: "900" }, closeText: { color: "#9DB9FF", textAlign: "center", marginTop: 18, fontWeight: "800" } });
