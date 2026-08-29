@@ -1,178 +1,20 @@
 import * as Speech from "expo-speech";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-
+import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { ScreenContainer } from "@/components/ScreenContainer";
-import { LISTENING_LINES, type ListeningLine } from "@/lib/data";
+import { getSceneLines, SCENES, type ListeningLine, type SceneKey, type Speaker } from "@/lib/data";
 import { getSpeechRate, selectVoiceForSpeaker } from "@/lib/voice";
-
+import { getWordDefinition } from "@/lib/word";
+const ModalComponent = Modal ?? View;
+const C = { bg: "#0B0C0F", panel: "#111317", border: "#3A3D45", text: "#F2F3F5", muted: "#9AA2B4", blue: "#2F6BEB", soft: "#162A57" };
 const SPEEDS = [0.75, 1, 1.25] as const;
-
-type Speed = (typeof SPEEDS)[number];
-
+function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" { return ["Mia", "Agent", "Lee", "Landlord", "Receptionist", "Banker", "Server", "StationAgent", "Clerk", "Teacher"].includes(speaker) ? "Mia" : "Alex"; }
+function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) { return <Text style={styles.lineText}>{text.split(/(\s+)/).map((part, i) => /\s+/.test(part) ? part : <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>{part}</Text>)}</Text>; }
 export default function ListeningScreen() {
-  const listRef = useRef<FlatList<ListeningLine>>(null);
-  const [speed, setSpeed] = useState<Speed>(1);
-  const [voices, setVoices] = useState<Speech.Voice[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("正在加载系统英语声线；未匹配时会使用默认声音。 ");
-  const [playingAll, setPlayingAll] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    Speech.getAvailableVoicesAsync().then((available) => {
-      if (!active) return;
-      setVoices(available);
-      setNotice(available.length > 0 ? "Alex 男声优先 · Mia 女声优先 · 不可用时使用默认声音" : "暂未读取到系统声线，将使用默认英语声音播放");
-    }).catch(() => {
-      if (active) setNotice("无法读取系统声线，将使用默认英语声音播放");
-    });
-    return () => {
-      active = false;
-      Speech.stop?.();
-    };
-  }, []);
-
-  const speakLine = (line: ListeningLine, onDone?: () => void) => {
-    Speech.stop?.();
-    const selection = selectVoiceForSpeaker(voices, line.speaker);
-    setActiveId(line.id);
-    Speech.speak?.(line.text, {
-      language: "en-US",
-      voice: selection.voice?.identifier,
-      rate: getSpeechRate(speed),
-      onDone: () => {
-        setActiveId(null);
-        onDone?.();
-      },
-      onStopped: () => setActiveId(null),
-      onError: () => {
-        setActiveId(null);
-        setNotice("系统语音播放失败，已回退到默认声音，请检查 Android 语音服务。");
-      },
-    });
-  };
-
-  const playAll = (index = 0) => {
-    if (index >= LISTENING_LINES.length) {
-      setPlayingAll(false);
-      setActiveId(null);
-      return;
-    }
-    setPlayingAll(true);
-    listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.35 });
-    speakLine(LISTENING_LINES[index], () => playAll(index + 1));
-  };
-
-  const stopAll = () => {
-    Speech.stop?.();
-    setPlayingAll(false);
-    setActiveId(null);
-  };
-
-  return (
-    <ScreenContainer>
-      <FlatList
-        ref={listRef}
-        data={LISTENING_LINES}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        onScrollToIndexFailed={() => undefined}
-        ListHeaderComponent={(
-          <View>
-            <View style={styles.headerRow}>
-              <View>
-                <Text style={styles.brand}>SpeakWise</Text>
-                <Text style={styles.kicker}>听力训练 · 日常问候</Text>
-              </View>
-              <View style={styles.countPill}><Text style={styles.countText}>40 句</Text></View>
-            </View>
-            <Text style={styles.title}>听懂，再开口。</Text>
-            <Text style={styles.subtitle}>跟随 Alex 和 Mia 的完整会话，按你的节奏反复听练。</Text>
-            <View style={styles.speedCard}>
-              <View style={styles.speedTitleRow}>
-                <Text style={styles.cardTitle}>播放速度</Text>
-                <Text style={styles.currentSpeed}>{speed}×</Text>
-              </View>
-              <View style={styles.speedRow}>
-                {SPEEDS.map((item) => (
-                  <Pressable key={item} onPress={() => setSpeed(item)} style={[styles.speedButton, speed === item && styles.speedButtonActive]} accessibilityRole="button" accessibilityLabel={`选择${item}倍速`}>
-                    <Text style={[styles.speedText, speed === item && styles.speedTextActive]}>{item}×</Text>
-                  </Pressable>
-                ))}
-              </View>
-              <View style={styles.voiceNotice}><Text style={styles.voiceNoticeDot}>●</Text><Text style={styles.voiceNoticeText}>{notice}</Text></View>
-              <Pressable onPress={playingAll ? stopAll : () => playAll()} style={[styles.playAllButton, playingAll && styles.stopButton]} accessibilityRole="button" accessibilityLabel={playingAll ? "停止播放全部" : "播放全部40句"}>
-                {playingAll ? <Text style={styles.playAllText}>■ 停止播放</Text> : <Text style={styles.playAllText}>▶ 一键播放 40 句</Text>}
-              </Pressable>
-            </View>
-            <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>逐句练习</Text><Text style={styles.sectionCaption}>点击任意句子播放</Text></View>
-          </View>
-        )}
-        renderItem={({ item, index }) => (
-          <View style={[styles.lineCard, activeId === item.id && styles.lineCardActive]}>
-            <View style={styles.lineTopRow}>
-              <View style={styles.indexBadge}><Text style={styles.indexText}>{String(index + 1).padStart(2, "0")}</Text></View>
-              <View style={styles.speakerInfo}><Text style={styles.speakerName}>{item.speaker}</Text><Text style={styles.speakerHint}>{item.speaker === "Alex" ? "男声优先" : "女声优先"}</Text></View>
-              {activeId === item.id && <ActivityIndicator color="#1E64D6" size="small" />}
-              <Pressable onPress={() => speakLine(item)} style={styles.linePlayButton} accessibilityRole="button" accessibilityLabel={`播放第${index + 1}句`}><Text style={styles.linePlayText}>{activeId === item.id ? "播放中" : "语音"}</Text></Pressable>
-            </View>
-            <Text style={styles.lineText}>{item.text}</Text>
-            <Text style={styles.translation}>{item.translation}</Text>
-            <Text style={styles.note}>学习提示：{item.note}</Text>
-          </View>
-        )}
-        ListFooterComponent={(
-          <Pressable onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })} style={styles.backTop} accessibilityRole="button" accessibilityLabel="返回页面顶部">
-            <Text style={styles.backTopText}>↑ 返回顶部</Text>
-          </Pressable>
-        )}
-      />
-    </ScreenContainer>
-  );
+  const listRef = useRef<FlatList<ListeningLine>>(null); const [scene, setScene] = useState<SceneKey>("greetings"); const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1); const [voices, setVoices] = useState<Speech.Voice[]>([]); const [activeId, setActiveId] = useState<string | null>(null); const [playingAll, setPlayingAll] = useState(false); const [selectedWord, setSelectedWord] = useState<string | null>(null); const [translated, setTranslated] = useState<Record<string, boolean>>({}); const lines = getSceneLines(scene);
+  useEffect(() => { Speech.getAvailableVoicesAsync().then(setVoices).catch(() => setVoices([])); return () => { Speech.stop?.(); }; }, []);
+  const speakLine = (line: ListeningLine, done?: () => void) => { Speech.stop?.(); setActiveId(line.id); const v = selectVoiceForSpeaker(voices, voiceSpeaker(line.speaker)); Speech.speak?.(line.text, { language: "en-US", voice: v.voice?.identifier, rate: getSpeechRate(speed), onDone: () => { setActiveId(null); done?.(); }, onStopped: () => setActiveId(null), onError: () => setActiveId(null) }); };
+  const playAll = (i = 0) => { if (i >= lines.length) { setPlayingAll(false); setActiveId(null); return; } setPlayingAll(true); listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: .3 }); speakLine(lines[i], () => playAll(i + 1)); };
+  return <ScreenContainer><FlatList ref={listRef} data={lines} keyExtractor={(x) => x.id} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} onScrollToIndexFailed={() => undefined} ListHeaderComponent={<View><View style={styles.nav}><View><Text style={styles.brand}>S　英语口语</Text><Text style={styles.kicker}>听力训练</Text></View><Text style={styles.count}>40句</Text></View><Text style={styles.title}>{SCENES.find((s) => s.key === scene)?.title}</Text><Text style={styles.subtitle}>40 句连续对话，逐句播放并点击单词查看发音和释义。</Text><View style={styles.sceneRow}>{SCENES.map((s) => <Pressable key={s.key} onPress={() => { setScene(s.key); setPlayingAll(false); Speech.stop?.(); }} style={[styles.scene, scene === s.key && styles.active]}><Text style={styles.sceneTitle}>{s.title}</Text></Pressable>)}</View><View style={styles.control}><View style={styles.controlHead}><Text style={styles.controlTitle}>播放控制</Text><Text style={styles.speed}>{speed}×</Text></View><View style={styles.speedRow}>{SPEEDS.map((s) => <Pressable key={s} onPress={() => setSpeed(s)} style={[styles.speedButton, speed === s && styles.active]} accessibilityLabel={`选择${s}倍速`}><Text style={styles.buttonText}>{s}×</Text></Pressable>)}</View><Pressable onPress={() => playingAll ? (Speech.stop?.(), setPlayingAll(false), setActiveId(null)) : playAll()} style={[styles.playAll, playingAll && styles.stop]} accessibilityLabel={playingAll ? "停止播放全部" : "播放全部40句"}><Text style={styles.buttonText}>{playingAll ? "■ 停止播放" : "▶ 一键播放 40 句"}</Text></Pressable><Text style={styles.notice}>暂未读取到系统声线，将使用默认英语声音播放</Text></View><Text style={styles.sectionTitle}>40句对话原文与列表</Text></View>} renderItem={({ item, index }) => <View style={[styles.lineCard, activeId === item.id && styles.lineActive]}><View style={styles.lineHead}><View style={styles.number}><Text style={styles.numberText}>{index + 1}</Text></View><Text style={styles.speaker}>{item.speaker}</Text>{activeId === item.id && <ActivityIndicator color={C.blue}/>}<Pressable onPress={() => speakLine(item)} style={styles.play}><Text style={styles.buttonText}>语音</Text></Pressable></View><WordSentence text={item.text} onWord={setSelectedWord}/>{translated[item.id] && <Text style={styles.translation}>{item.translation}</Text>}<View style={styles.actions}><Pressable onPress={() => setTranslated((t) => ({ ...t, [item.id]: !t[item.id] }))}><Text style={styles.actionText}>{translated[item.id] ? "收起翻译" : "翻译"}</Text></Pressable><Text style={styles.note}>学习提示：{item.note}</Text></View></View>} ListFooterComponent={<Pressable onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })} style={styles.backTop} accessibilityLabel="返回页面顶部"><Text style={styles.buttonText}>↑ 返回顶部</Text></Pressable>}/><ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}><Pressable style={styles.backdrop} onPress={() => setSelectedWord(null)}><View style={styles.wordCard}><Text style={styles.wordTitle}>{selectedWord}</Text><Text style={styles.phonetic}>{selectedWord ? getWordDefinition(selectedWord).phonetic : ""}</Text><Text style={styles.translation}>{selectedWord ? getWordDefinition(selectedWord).meaning : ""}</Text><Pressable onPress={() => selectedWord && Speech.speak?.(selectedWord, { language: "en-US" })} style={styles.playAll}><Text style={styles.buttonText}>朗读单词</Text></Pressable><Pressable onPress={() => setSelectedWord(null)}><Text style={styles.notice}>关闭卡片</Text></Pressable></View></Pressable></ModalComponent></ScreenContainer>;
 }
-
-const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 34, gap: 12 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  brand: { color: "#16233B", fontSize: 23, fontWeight: "800" },
-  kicker: { color: "#718098", fontSize: 12, marginTop: 3 },
-  countPill: { backgroundColor: "#EAF4FF", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
-  countText: { color: "#1E64D6", fontSize: 12, fontWeight: "800" },
-  title: { color: "#162640", fontSize: 34, fontWeight: "900", marginTop: 22, letterSpacing: -1 },
-  subtitle: { color: "#78869B", fontSize: 14, lineHeight: 21, marginTop: 7 },
-  speedCard: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4EAF2", padding: 15, marginTop: 18 },
-  speedTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  cardTitle: { color: "#263750", fontSize: 14, fontWeight: "800" },
-  currentSpeed: { color: "#1E64D6", fontSize: 14, fontWeight: "900" },
-  speedRow: { flexDirection: "row", gap: 8, marginTop: 11 },
-  speedButton: { flex: 1, borderRadius: 10, borderWidth: 1, borderColor: "#DDE5F0", alignItems: "center", paddingVertical: 10, backgroundColor: "#FAFBFD" },
-  speedButtonActive: { borderColor: "#1E64D6", backgroundColor: "#EAF3FF" },
-  speedText: { color: "#718097", fontSize: 13, fontWeight: "800" },
-  speedTextActive: { color: "#1E64D6" },
-  voiceNotice: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12 },
-  voiceNoticeDot: { color: "#25B477", fontSize: 10 },
-  voiceNoticeText: { color: "#76859A", fontSize: 10, flex: 1, lineHeight: 15 },
-  playAllButton: { minHeight: 46, borderRadius: 12, backgroundColor: "#1E64D6", alignItems: "center", justifyContent: "center", marginTop: 13 },
-  stopButton: { backgroundColor: "#BE4C5D" },
-  playAllText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  sectionTitle: { color: "#263750", fontSize: 18, fontWeight: "800" },
-  sectionCaption: { color: "#8B98AA", fontSize: 11 },
-  lineCard: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#E4EAF2", padding: 14 },
-  lineCardActive: { borderColor: "#8CB8F3", backgroundColor: "#F7FBFF" },
-  lineTopRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  indexBadge: { width: 34, height: 28, borderRadius: 8, backgroundColor: "#F0F4F9", alignItems: "center", justifyContent: "center" },
-  indexText: { color: "#64758E", fontSize: 10, fontWeight: "900" },
-  speakerInfo: { flex: 1 },
-  speakerName: { color: "#1E64D6", fontSize: 12, fontWeight: "900" },
-  speakerHint: { color: "#9AA5B5", fontSize: 9, marginTop: 2 },
-  linePlayButton: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, backgroundColor: "#EEF5FF" },
-  linePlayText: { color: "#1E64D6", fontSize: 10, fontWeight: "800" },
-  lineText: { color: "#2A3C59", fontSize: 14, lineHeight: 21, marginTop: 12 },
-  translation: { color: "#7D8BA0", fontSize: 12, lineHeight: 18, marginTop: 7 },
-  note: { color: "#9B7B45", backgroundColor: "#FFF8E9", borderRadius: 8, padding: 8, fontSize: 10, lineHeight: 15, marginTop: 10 },
-  backTop: { alignSelf: "center", marginTop: 16, borderRadius: 20, borderWidth: 1, borderColor: "#DCE5F0", backgroundColor: "#FFFFFF", paddingHorizontal: 16, paddingVertical: 10 },
-  backTopText: { color: "#50719D", fontSize: 12, fontWeight: "800" },
-});
+const styles = StyleSheet.create({ content: { padding: 18, paddingBottom: 40, gap: 12, backgroundColor: C.bg }, nav: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, brand: { color: C.text, fontSize: 23, fontWeight: "900" }, kicker: { color: C.muted, fontSize: 11, marginTop: 3 }, count: { color: C.text, backgroundColor: C.soft, borderRadius: 18, padding: 9, fontWeight: "900" }, title: { color: C.text, fontSize: 32, fontWeight: "900", marginTop: 20 }, subtitle: { color: C.muted, lineHeight: 21 }, sceneRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 12 }, scene: { borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 10 }, active: { backgroundColor: C.blue, borderColor: "#78A1FF" }, sceneTitle: { color: C.text, fontSize: 12, fontWeight: "800" }, control: { backgroundColor: C.panel, borderWidth: 1, borderColor: C.border, borderRadius: 18, padding: 15 }, controlHead: { flexDirection: "row", justifyContent: "space-between" }, controlTitle: { color: C.text, fontWeight: "900" }, speed: { color: "#8DB0FF", fontWeight: "900" }, speedRow: { flexDirection: "row", gap: 8, marginVertical: 12 }, speedButton: { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 9, padding: 10, alignItems: "center" }, playAll: { backgroundColor: C.blue, borderRadius: 10, padding: 12, alignItems: "center" }, stop: { backgroundColor: "#8B3D4A" }, buttonText: { color: C.text, fontWeight: "800", fontSize: 12 }, notice: { color: C.muted, fontSize: 10, marginTop: 10 }, sectionTitle: { color: C.text, fontSize: 19, fontWeight: "900", marginVertical: 8 }, lineCard: { backgroundColor: C.panel, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 14 }, lineActive: { backgroundColor: "#16213D", borderColor: "#6A95FF" }, lineHead: { flexDirection: "row", alignItems: "center", gap: 9 }, number: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#252A34", alignItems: "center", justifyContent: "center" }, numberText: { color: C.muted, fontWeight: "900" }, speaker: { color: "#8DB0FF", fontWeight: "900", flex: 1 }, play: { backgroundColor: C.soft, borderRadius: 8, padding: 8 }, lineText: { color: C.text, fontSize: 15, lineHeight: 23, marginTop: 10 }, word: { color: C.text }, translation: { color: C.muted, lineHeight: 19, marginTop: 7 }, actions: { marginTop: 10, gap: 7 }, actionText: { color: "#9DB9FF", fontWeight: "800", fontSize: 12 }, note: { color: "#C2A56D", fontSize: 10, lineHeight: 16 }, backTop: { alignSelf: "center", borderWidth: 1, borderColor: C.border, borderRadius: 20, padding: 10 }, backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.75)", justifyContent: "flex-end" }, wordCard: { backgroundColor: "#151820", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 13 }, wordTitle: { color: C.text, fontSize: 28, fontWeight: "900" }, phonetic: { color: "#8DB0FF", fontSize: 17 } });

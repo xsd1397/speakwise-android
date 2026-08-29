@@ -50,6 +50,12 @@ https://speakwise-wsicpu2u.manus.space
 
 该 APK 是用于测试安装的 Release APK，已经内置 JavaScript bundle，不需要 Metro；它仍不是 Google Play 发布用的 AAB。当前 Release 变体使用 Expo prebuild 生成的 debug signing fallback，仅适合内部测试。若以后需要正式发布，仍需配置正式 Android signing keystore 和 AAB 流程。
 
+## 新分支改造
+
+本次改造从 `v0.1.0-android-stable` 创建，分支名为 `feature/dark-theme-web-parity`，稳定版 `main` 未修改。当前分支已接入网页版 10 个场景的完整 40 句听力数据；口语页可按场景加载 10 句练习内容，并提供逐句语音、翻译、录音评分入口、单词点击气泡、音标、中文释义和收藏状态。AI 对话继续调用现有 `dialogue.reply` 路由，并在回复后播放整句语音。全局页面、底部导航、进度页和启动画面已经切换为深色视觉，其中启动画面使用 `assets/images/splash-screen.jpg`。
+
+由于当前沙箱没有 Android SDK，仍需在 Android 真机或 GitHub Actions 上验证启动画面裁切、麦克风权限、真实录音上传、TTS 声线以及不同屏幕尺寸。网页版对照记录保存在 `web_parity_findings.md`。
+
 ## 验证
 
 ```bash
