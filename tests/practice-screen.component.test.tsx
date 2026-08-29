@@ -51,6 +51,7 @@ jest.mock("@/components/ScreenContainer", () => {
 jest.mock("@/lib/api", () => ({
   __esModule: true,
   evaluateRecording: jest.fn(),
+  transcribeRecording: jest.fn(async () => ({ text: "Hello there" })),
   getApiBaseUrl: () => mockApiBaseUrl,
   replyToDialogue: jest.fn(),
 }));
@@ -117,14 +118,12 @@ describe("PracticeScreen", () => {
     expect(mockSendReply).not.toHaveBeenCalled();
   });
 
-  it("switches the real recording control between start and stop", async () => {
+  it("shows only the AI recording and reply hint controls", () => {
     render(<PracticeScreen />);
 
-    fireEvent.press(screen.getByLabelText("开始真实录音"));
-    expect(await screen.findByLabelText("停止录音")).toBeTruthy();
-
-    fireEvent.press(screen.getByLabelText("停止录音"));
-    expect(await screen.findByText("真实录音已保存；配置后端地址后可提交评分")).toBeTruthy();
+    expect(screen.queryByLabelText("开始真实录音")).toBeNull();
+    expect(screen.getByLabelText("开始 AI 录音")).toBeTruthy();
+    expect(screen.getByText("回复提示")).toBeTruthy();
   });
 
   it("appends a successful AI response and keeps whole-sentence speech", async () => {
