@@ -15,6 +15,35 @@ function wordInfo(word: string) { return getWordDefinition(word); }
 function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" { return ["Mia", "Agent", "Lee", "Landlord", "Receptionist", "Banker", "Server", "StationAgent", "Clerk", "Teacher"].includes(speaker) ? "Mia" : "Alex"; }
 function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) { return <Text style={styles.sentence}>{text.split(/(\s+)/).map((part, i) => /\s+/.test(part) ? part : <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>{part}</Text>)}</Text>; }
 
+type ReplyHint = { text: string; translation: string };
+function buildReplyHints(reply: string): ReplyHint[] {
+  const source = reply.replace(/\s+/g, " ").trim();
+  const quoted = source.length > 72 ? `${source.slice(0, 69)}…` : source;
+  const lower = source.toLowerCase();
+  if (/\b(what|where|when|why|how|could|would|do you|are you|have you)\b|[?？]/i.test(source)) {
+    return [
+      { text: `To answer your question about “${quoted}”, I would like to share my own experience.`, translation: `关于“${quoted}”这个问题，我想分享一下自己的经历。` },
+      { text: `That is an interesting point about “${quoted}”; could you tell me more about it?`, translation: `关于“${quoted}”这一点很有意思；你能再多告诉我一些吗？` },
+    ];
+  }
+  if (/\b(recommend|suggest|advice|should|need to|try|remember)\b/i.test(lower)) {
+    return [
+      { text: `Your suggestion about “${quoted}” makes sense, and I will try it.`, translation: `你关于“${quoted}”的建议很有道理，我会试试看。` },
+      { text: `Before I decide about “${quoted}”, could you explain the main benefit?`, translation: `在决定“${quoted}”之前，你能解释一下主要好处吗？` },
+    ];
+  }
+  if (/\b(problem|issue|difficult|concern|emergency|injured|unsafe|warning)\b/i.test(lower)) {
+    return [
+      { text: `I understand the concern about “${quoted}”, and I will follow your instructions.`, translation: `我理解你对“${quoted}”的担忧，会按照你的指示去做。` },
+      { text: `Regarding “${quoted}”, what should I do first to stay safe?`, translation: `关于“${quoted}”，为了安全起见我首先应该做什么？` },
+    ];
+  }
+  return [
+    { text: `I agree with your point about “${quoted}”, and I can give an example.`, translation: `我同意你关于“${quoted}”的观点，也可以举一个例子。` },
+    { text: `I would like to add one detail about “${quoted}” from my own experience.`, translation: `关于“${quoted}”，我想根据自己的经历再补充一个细节。` },
+  ];
+}
+
 export default function PracticeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -62,14 +91,7 @@ export default function PracticeScreen() {
   const info = selectedWord ? wordInfo(selectedWord) : null;
   const lastAssistant = [...dialogue].reverse().find((message) => message.role === "assistant");
   const lastReply = (lastAssistant?.text ?? target.text).trim();
-  const hintTopic = lastReply.replace(/[.!?].*$/, "").slice(0, 48).toLowerCase();
-  const hintTexts = /\b(what|where|when|why|how|could|would|do you|are you|have you)\b/i.test(lastReply)
-    ? [{ text: `I think ${hintTopic} is important to me.`, translation: `我认为${hintTopic}对我很重要。` }, { text: `Could you explain ${hintTopic} in a little more detail?`, translation: `您能更详细地解释${hintTopic}吗？` }]
-    : /\b(recommend|suggest|advice|should|need to|try)\b/i.test(lastReply)
-      ? [{ text: "That is helpful advice. I will think about it.", translation: "这个建议很有帮助，我会认真考虑。" }, { text: "Could you suggest the next step for me?", translation: "您能建议我下一步怎么做吗？" }]
-      : /\b(problem|issue|difficult|concern|emergency|injured)\b/i.test(lastReply)
-        ? [{ text: "I understand the concern, and I will follow your instructions.", translation: "我理解这个问题，会按照您的指示做。" }, { text: "Could you tell me what I should do next?", translation: "您能告诉我下一步应该做什么吗？" }]
-        : [{ text: "That makes sense in this situation.", translation: "在这种情况下，这样说得通。" }, { text: "I would like to share a little more about it.", translation: "我想再分享一些相关情况。" }];
+  const hintTexts = buildReplyHints(lastReply);
   return <ScreenContainer><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}><ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
     <View style={styles.nav}><View><Text style={styles.brand}>S　英语口语</Text><Text style={styles.kicker}>SpeakWise · 练习助手</Text></View><Text style={styles.wordCount}>{savedWords.length}</Text></View>
     <Text style={styles.breadcrumb}>英语口语　/　{SCENES.find((s) => s.key === scene)?.title}</Text>
