@@ -33,9 +33,9 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-screen.png",
+          "image": "./assets/images/splash-screen-deep-blue.png",
           "resizeMode": "cover",
-          "backgroundColor": "#F8F3E6"
+          "backgroundColor": "#061B46"
         }
       ],
       "expo-audio"

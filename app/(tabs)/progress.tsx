@@ -3,12 +3,14 @@ import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native
 import * as Speech from "expo-speech";
 import { ScreenContainer } from "@/components/ScreenContainer";
 import { useWordbook } from "@/lib/wordbook";
+import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "@/lib/word";
 
 export default function ProgressScreen() {
   const listRef = useRef<FlatList>(null);
   const { words } = useWordbook();
   const [selected, setSelected] = useState<typeof words[number] | null>(null);
-  useEffect(() => { if (!selected) return; const timer = setTimeout(() => setSelected(null), 5000); return () => clearTimeout(timer); }, [selected]);
+  const [selectedDefinition, setSelectedDefinition] = useState<WordDefinition | null>(null);
+  useEffect(() => { if (!selected) { setSelectedDefinition(null); return; } setSelectedDefinition(getWordDefinition(selected.word)); let active = true; lookupWordDefinition(selected.word).then((definition) => { if (active) setSelectedDefinition(definition); }); return () => { active = false; }; }, [selected]);
   return <ScreenContainer><FlatList ref={listRef} data={[]} renderItem={null} contentContainerStyle={styles.content} ListHeaderComponent={<View>
     <View style={styles.headerRow}><View><Text style={styles.brand}>SpeakWise</Text><Text style={styles.kicker}>我的学习进度</Text></View><View style={styles.avatar}><Text style={styles.avatarText}>S</Text></View></View>
     <Text style={styles.title}>稳步进步，持续开口。</Text><Text style={styles.subtitle}>这里会记录你的真实练习结果和收藏的生词。</Text>
@@ -17,7 +19,7 @@ export default function ProgressScreen() {
     <View style={styles.emptyCard}><Text style={styles.emptyIcon}>◌</Text><Text style={styles.emptyTitle}>完成一次真实练习后，这里会出现你的进度</Text><Text style={styles.emptyText}>SpeakWise 不会预填或伪造评分、学习时长和用户数据。</Text></View>
     <Pressable onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })} style={styles.backTop} accessibilityRole="button" accessibilityLabel="返回页面顶部"><Text style={styles.backTopText}>↑ 返回顶部</Text></Pressable>
   </View>} />
-  <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => setSelected(null)}><Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}><View style={styles.modalCard}><Text style={styles.modalEyebrow}>生词 · {selected?.scene}</Text><Text style={styles.modalWord}>{selected?.word}</Text><Text style={styles.modalPhonetic}>{selected?.phonetic}</Text><Text style={styles.modalMeaning}>{selected?.meaning}</Text><Text style={styles.exampleLabel}>场景例句</Text><Text style={styles.example}>{selected?.example}</Text><Pressable style={styles.speakButton} onPress={() => selected && Speech.speak(selected.word, { language: "en-US" })}><Text style={styles.speakText}>▶ 语音朗读</Text></Pressable><Pressable onPress={() => setSelected(null)}><Text style={styles.closeText}>关闭</Text></Pressable></View></Pressable></Modal>
+  <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => setSelected(null)}><Pressable style={styles.modalBackdrop} onPress={() => setSelected(null)}><View style={styles.modalCard}><Text style={styles.modalEyebrow}>生词 · {selected?.scene}</Text><Text style={styles.modalWord}>{selected?.word}</Text><Text style={styles.modalPhonetic}>{selectedDefinition?.phonetic ?? selected?.phonetic}</Text><Text style={styles.modalMeaning}>{selectedDefinition?.meaning ?? selected?.meaning}</Text><Text style={styles.exampleLabel}>场景例句</Text><Text style={styles.example}>{selected?.example}</Text><Pressable style={styles.speakButton} onPress={() => selected && Speech.speak(selected.word, { language: "en-US" })}><Text style={styles.speakText}>▶ 语音朗读</Text></Pressable><Pressable onPress={() => setSelected(null)}><Text style={styles.closeText}>关闭</Text></Pressable></View></Pressable></Modal>
   </ScreenContainer>;
 }
 function Stat({ value, label, hint }: { value: string; label: string; hint: string }) { return <View style={styles.progressCard}><Text style={styles.progressValue}>{value}</Text><Text style={styles.progressLabel}>{label}</Text><Text style={styles.progressHint}>{hint}</Text></View>; }
