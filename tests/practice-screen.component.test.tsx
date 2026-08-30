@@ -53,6 +53,8 @@ jest.mock("@/lib/api", () => ({
   evaluateRecording: jest.fn(),
   transcribeRecording: jest.fn(async () => ({ text: "Hello there" })),
   getApiBaseUrl: () => mockApiBaseUrl,
+  translateToChinese: jest.fn(async () => "很高兴也见到你。"),
+  translateToEnglish: jest.fn(async (text: string) => text),
   replyToDialogue: jest.fn(),
 }));
 
