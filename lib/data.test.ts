@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { LISTENING_LINES, PRACTICE_DIALOGUE, SCENE_CONTENT, SCENES } from "./data";
+import { getPracticeDialogue, LISTENING_LINES, PRACTICE_DIALOGUE, SCENE_CONTENT, SCENES } from "./data";
 
 describe("SpeakWise learning content", () => {
   it("contains exactly 40 listening lines", () => {
@@ -14,6 +14,14 @@ describe("SpeakWise learning content", () => {
       const lines = SCENE_CONTENT[scene.key];
       expect(lines).toHaveLength(40);
       expect(lines.every((line) => /[A-Za-z]/.test(line.text) && line.translation.length > 0)).toBe(true);
+    }
+  });
+
+  it("provides rewritten advanced dialogues for the seven requested scenes", () => {
+    for (const scene of ["housing", "medical", "banking", "shopping", "transit", "government", "school"] as const) {
+      const lines = getPracticeDialogue(scene, "advanced");
+      expect(lines).toHaveLength(10);
+      expect(lines.every((line) => line.id.startsWith(`${scene}-advanced-`))).toBe(true);
     }
   });
 

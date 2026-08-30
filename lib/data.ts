@@ -532,6 +532,93 @@ export const SCENE_CONTENT: Record<SceneKey, ListeningLine[]> = {
   ],
 };
 
+const ADVANCED_BY_SCENE: Partial<Record<SceneKey, PracticeLine[]>> = {
+  housing: [
+    { id: "housing-advanced-1", speaker: "Tenant", text: "Before signing the lease, could you clarify which utilities are included and whether the rent is subject to annual adjustment?", translation: "签租约前，您能说明哪些公共事业费已包含，以及租金是否每年调整吗？", note: "用 which 和 whether 从句核实租约条件。" },
+    { id: "housing-advanced-2", speaker: "Landlord", text: "The rent covers water and building maintenance, while electricity is billed separately according to usage.", translation: "租金包含水费和楼宇维护费，电费则按用量另行计费。", note: "用 while 对比两类费用。" },
+    { id: "housing-advanced-3", speaker: "Tenant", text: "I noticed a clause requiring written notice sixty days before termination; is that negotiable?", translation: "我注意到条款要求提前六十天书面通知终止租约，这一点可以协商吗？", note: "用分词短语和被动语态讨论合同条款。" },
+    { id: "housing-advanced-4", speaker: "Landlord", text: "We can reduce the notice period to thirty days provided that the apartment is left in good condition.", translation: "如果房屋保持良好状态，我们可以把通知期缩短到三十天。", note: "provided that 引导条件。" },
+    { id: "housing-advanced-5", speaker: "Tenant", text: "Could you also explain how maintenance requests are prioritized in the event of an urgent repair?", translation: "如果需要紧急维修，您还可以说明维修请求如何排序吗？", note: "用 how 从句询问流程。" },
+    { id: "housing-advanced-6", speaker: "Landlord", text: "Emergency repairs are handled immediately, whereas routine requests are scheduled within three business days.", translation: "紧急维修会立即处理，而普通请求会在三个工作日内安排。", note: "用被动语态和 whereas 对比服务级别。" },
+    { id: "housing-advanced-7", speaker: "Tenant", text: "If the inspection reveals problems that predate my tenancy, I would not be responsible for restoring them, correct?", translation: "如果检查发现问题在我入住前就存在，我不负责恢复原状，对吗？", note: "用 if 条件句和反意确认。" },
+    { id: "housing-advanced-8", speaker: "Landlord", text: "Correct, as long as those issues are documented in the move-in report.", translation: "正确，只要这些问题记录在入住报告中。", note: "as long as 表示必要条件。" },
+    { id: "housing-advanced-9", speaker: "Tenant", text: "In that case, I am prepared to proceed once both parties have initialed the inventory.", translation: "这样的话，双方在物品清单上签署姓名缩写后，我就准备继续了。", note: "用 once 时间条件表达签约前提。" },
+    { id: "housing-advanced-10", speaker: "Landlord", text: "I will email the revised agreement tonight so that you can review it at your convenience.", translation: "我今晚会把修订后的协议发给您，方便您抽时间审核。", note: "so that 表示目的。" },
+  ],
+  medical: [
+    { id: "medical-advanced-1", speaker: "Patient", text: "Although the symptoms began mildly, they have persisted long enough to interfere with my sleep and concentration.", translation: "虽然症状起初很轻，但持续时间已经长到影响睡眠和注意力。", note: "用 although 让步和现在完成时描述病情。" },
+    { id: "medical-advanced-2", speaker: "Doctor", text: "Have you identified any triggers, such as particular foods, medications, or stressful situations?", translation: "您有没有发现诱因，比如特定食物、药物或压力情境？", note: "用 such as 列举可能诱因。" },
+    { id: "medical-advanced-3", speaker: "Patient", text: "The discomfort tends to worsen after meals, but it improves somewhat when I remain upright.", translation: "不适往往在饭后加重，但保持直立时会有所缓解。", note: "用 tends to 和 when 从句描述规律。" },
+    { id: "medical-advanced-4", speaker: "Doctor", text: "That pattern may indicate reflux, though we should rule out other causes before drawing a conclusion.", translation: "这种模式可能提示反流，不过下结论前我们应排除其他原因。", note: "用 may、though 和 before 从句表达谨慎判断。" },
+    { id: "medical-advanced-5", speaker: "Patient", text: "Would it be advisable to keep a symptom diary while we wait for the test results?", translation: "等待检查结果期间，记录症状日记是否合适？", note: "用 Would it be advisable to 委婉征求医学建议。" },
+    { id: "medical-advanced-6", speaker: "Doctor", text: "Yes, particularly if you record the timing, severity, and foods consumed before each episode.", translation: "可以，尤其要记录每次发作前的时间、严重程度和所吃食物。", note: "用 if 从句和并列名词提供具体要求。" },
+    { id: "medical-advanced-7", speaker: "Patient", text: "If the medication causes drowsiness, should I avoid driving even when I feel alert?", translation: "如果药物导致嗜睡，即使感觉清醒，我也应避免驾驶吗？", note: "用条件句和 even when 表达风险边界。" },
+    { id: "medical-advanced-8", speaker: "Doctor", text: "You should avoid driving until you know how your body responds, regardless of how alert you feel.", translation: "在确认身体反应前都应避免驾驶，无论感觉多么清醒。", note: "用 until 和 regardless of 强化安全建议。" },
+    { id: "medical-advanced-9", speaker: "Patient", text: "I appreciate the explanation; could you tell me which warning signs would require immediate attention?", translation: "谢谢您的解释；您能告诉我哪些警示症状需要立即处理吗？", note: "用 which 从句和 require 表达精确追问。" },
+    { id: "medical-advanced-10", speaker: "Doctor", text: "Seek urgent care if the pain becomes severe, breathing is affected, or you develop a high fever.", translation: "如果疼痛加剧、呼吸受影响或出现高烧，请立即就医。", note: "用并列条件句给出清晰行动标准。" },
+  ],
+  banking: [
+    { id: "banking-advanced-1", speaker: "Customer", text: "Before I open the account, could you outline the minimum balance requirements and the circumstances under which fees are waived?", translation: "开户前，您能说明最低余额要求以及哪些情况下可以免除费用吗？", note: "用 under which 关系结构询问账户条件。" },
+    { id: "banking-advanced-2", speaker: "Banker", text: "The monthly fee is waived provided that your balance remains above the stated threshold.", translation: "只要余额保持在规定门槛以上，月费就会免除。", note: "用 provided that 表达银行条件。" },
+    { id: "banking-advanced-3", speaker: "Customer", text: "If my income is deposited directly, would that requirement still apply?", translation: "如果工资直接存入，这项要求仍然适用吗？", note: "用 if 条件句和 would 询问例外。" },
+    { id: "banking-advanced-4", speaker: "Banker", text: "No, direct deposit qualifies you for the fee-free tier, subject to verification.", translation: "不适用，直接存款可使您符合免月费等级，但须经过核实。", note: "用 qualifies、subject to 增加正式词汇。" },
+    { id: "banking-advanced-5", speaker: "Customer", text: "I would also like to understand how international transfers are monitored for compliance purposes.", translation: "我还想了解，为了合规，国际转账会如何受到监控。", note: "用 how 从句和 for compliance purposes 说明正式目的。" },
+    { id: "banking-advanced-6", speaker: "Banker", text: "Transactions may be reviewed when they exceed certain limits or appear inconsistent with your account activity.", translation: "当交易超过特定限额或与账户活动不一致时，可能会被审核。", note: "用被动语态和 when 从句解释风控。" },
+    { id: "banking-advanced-7", speaker: "Customer", text: "Would providing supporting documents in advance help prevent unnecessary delays?", translation: "提前提供证明文件是否有助于避免不必要的延误？", note: "用动名词主语和 Would... help 委婉提问。" },
+    { id: "banking-advanced-8", speaker: "Banker", text: "It usually does, especially when the source and purpose of the funds are clearly documented.", translation: "通常有帮助，尤其是在资金来源和用途有清晰文件证明时。", note: "用 especially when 强调条件。" },
+    { id: "banking-advanced-9", speaker: "Customer", text: "In that case, I will gather the documents before authorizing the first transfer.", translation: "这样的话，我会在授权第一笔转账前准备好文件。", note: "用 before 从句组织办理步骤。" },
+    { id: "banking-advanced-10", speaker: "Banker", text: "That approach should make the review more efficient and reduce the likelihood of follow-up requests.", translation: "这样做应能提高审核效率，减少后续补充材料请求。", note: "用 make...more 和 reduce the likelihood of 表达结果。" },
+  ],
+  shopping: [
+    { id: "shopping-advanced-1", speaker: "Customer", text: "The item appears to be unused, yet the packaging was damaged when I opened the delivery.", translation: "商品看起来未使用过，但我打开包裹时包装已经损坏。", note: "用 yet 转折并使用被动语态。" },
+    { id: "shopping-advanced-2", speaker: "Clerk", text: "I am sorry about that; let me check whether the damage was recorded before dispatch.", translation: "很抱歉，我来确认发货前是否记录过损坏。", note: "用 whether 从句和 before 时间关系。" },
+    { id: "shopping-advanced-3", speaker: "Customer", text: "If it was damaged in transit, I would prefer a replacement rather than a partial refund.", translation: "如果运输途中损坏，我更希望换货而不是部分退款。", note: "用虚拟条件和 rather than 表达偏好。" },
+    { id: "shopping-advanced-4", speaker: "Clerk", text: "We can arrange a replacement, provided that the original item is returned with all accessories.", translation: "我们可以安排换货，前提是原商品连同所有配件一起退回。", note: "用 provided that 和被动结构说明条件。" },
+    { id: "shopping-advanced-5", speaker: "Customer", text: "Could you clarify how long the replacement process normally takes and whether shipping is covered?", translation: "您能说明换货通常需要多久，以及运费是否承担吗？", note: "用并列 how 和 whether 从句提出完整问题。" },
+    { id: "shopping-advanced-6", speaker: "Clerk", text: "Once the return has been inspected, the replacement is usually dispatched within two working days.", translation: "退货检查完成后，替换商品通常会在两个工作日内发出。", note: "用现在完成时被动和 once 从句。" },
+    { id: "shopping-advanced-7", speaker: "Customer", text: "I understand, but I need the item before next Friday because it is intended for a formal event.", translation: "我明白，但我需要在下周五前收到，因为这是为正式活动准备的。", note: "用 because 从句交代实际限制。" },
+    { id: "shopping-advanced-8", speaker: "Clerk", text: "I cannot guarantee delivery, although I can upgrade the shipment at no additional charge.", translation: "我不能保证送达，不过可以免费升级配送。", note: "用 although 让步和 at no additional charge。" },
+    { id: "shopping-advanced-9", speaker: "Customer", text: "That would be helpful; please confirm the revised tracking information by email.", translation: "那会很有帮助，请通过邮件确认更新后的物流信息。", note: "用祈使句和过去分词修饰名词。" },
+    { id: "shopping-advanced-10", speaker: "Clerk", text: "Certainly. I will include the confirmation in your case record so that it can be followed up promptly.", translation: "当然，我会把确认信息放入您的案件记录，以便及时跟进。", note: "用 so that 目的从句和被动语态。" },
+  ],
+  transit: [
+    { id: "transit-advanced-1", speaker: "Passenger", text: "The route appears to have been diverted, but the announcement did not specify how long the disruption would last.", translation: "这条线路似乎改道了，但公告没有说明中断会持续多久。", note: "用现在完成时和 how long 从句描述不确定性。" },
+    { id: "transit-advanced-2", speaker: "Agent", text: "The diversion is expected to remain in effect until the engineering inspection has been completed.", translation: "预计改道会持续到工程检查完成。", note: "用被动结构和 until 从句。" },
+    { id: "transit-advanced-3", speaker: "Passenger", text: "If I transfer at the next station, will my original ticket still be valid for the replacement service?", translation: "如果我在下一站换乘，原车票对接驳服务仍有效吗？", note: "用 if 条件句询问票务衔接。" },
+    { id: "transit-advanced-4", speaker: "Agent", text: "Yes, as long as you do not exit the paid area or alter your journey beyond the permitted zone.", translation: "有效，只要您不离开付费区，也不超出允许区域改变行程。", note: "用 as long as 和并列否定条件。" },
+    { id: "transit-advanced-5", speaker: "Passenger", text: "Could you recommend an alternative that would get me there with the fewest additional transfers?", translation: "您能推荐一条额外换乘次数最少的替代路线吗？", note: "用关系从句和最高级表达路线优化。" },
+    { id: "transit-advanced-6", speaker: "Agent", text: "Take the express line eastbound, then change to the local service where the platforms are connected.", translation: "请乘坐向东的快线，再在站台相连处换乘普通线路。", note: "用祈使句和 where 从句说明路线。" },
+    { id: "transit-advanced-7", speaker: "Passenger", text: "I would appreciate it if you could mark the transfer on this map, since I am unfamiliar with the area.", translation: "如果您能在地图上标出换乘点，我会非常感谢，因为我不熟悉这里。", note: "用 I would appreciate it if 委婉请求。" },
+    { id: "transit-advanced-8", speaker: "Agent", text: "Certainly; I will also note the exits to use in case the station becomes crowded.", translation: "当然，我也会标出出口，以防车站变得拥挤。", note: "用 in case 从句说明预防措施。" },
+    { id: "transit-advanced-9", speaker: "Passenger", text: "That clarification is exactly what I needed to avoid missing the connection.", translation: "这个说明正好帮助我避免错过换乘。", note: "用 what 从句和动词不定式表达目的。" },
+    { id: "transit-advanced-10", speaker: "Agent", text: "You are welcome. Allow extra time, as temporary restrictions may be introduced without notice.", translation: "不客气。请预留额外时间，因为临时限制可能会在未通知的情况下实施。", note: "用 may、被动语态和 without notice 提醒不确定性。" },
+  ],
+  government: [
+    { id: "government-advanced-1", speaker: "Applicant", text: "I would like to confirm which documents are required before I submit the residence application.", translation: "我想确认提交居留申请前需要哪些文件。", note: "用 which 从句准确询问材料。" },
+    { id: "government-advanced-2", speaker: "Clerk", text: "You will need proof of address, valid identification, and evidence that the application fee has been paid.", translation: "您需要地址证明、有效身份证件和申请费已缴纳的证明。", note: "用并列名词和现在完成时被动。" },
+    { id: "government-advanced-3", speaker: "Applicant", text: "If one document is issued abroad, does it have to be translated and officially certified?", translation: "如果有一份文件在国外签发，是否必须翻译并正式认证？", note: "用 if 条件句和被动结构。" },
+    { id: "government-advanced-4", speaker: "Clerk", text: "Yes, unless it is accompanied by an accepted multilingual certificate.", translation: "是的，除非它附有认可的多语言证明。", note: "用 unless 和被动分词表达例外。" },
+    { id: "government-advanced-5", speaker: "Applicant", text: "Could you explain how long the review normally takes once the file has been submitted?", translation: "您能说明材料提交后审核通常需要多久吗？", note: "用 once 和现在完成时被动。" },
+    { id: "government-advanced-6", speaker: "Clerk", text: "The initial review is completed within ten business days, although complex cases may take longer.", translation: "初审会在十个工作日内完成，不过复杂案件可能需要更久。", note: "用被动语态和 although 说明时间差异。" },
+    { id: "government-advanced-7", speaker: "Applicant", text: "Would submitting additional evidence proactively reduce the chance of a request for clarification?", translation: "主动提交补充证据是否能减少被要求说明的可能？", note: "用动名词主语、proactively 和 reduce the chance of。" },
+    { id: "government-advanced-8", speaker: "Clerk", text: "It may, provided that the evidence directly addresses the criteria listed in the guidance.", translation: "可能可以，前提是证据直接对应指南中列出的标准。", note: "用 may 和 provided that 表达谨慎判断。" },
+    { id: "government-advanced-9", speaker: "Applicant", text: "If my contact details change while the application is pending, how should I notify the office?", translation: "如果申请待审期间联系方式改变，我应如何通知办公室？", note: "用 if 和 how 从句处理行政变化。" },
+    { id: "government-advanced-10", speaker: "Clerk", text: "Notify us through the online portal so that the correspondence is not sent to an outdated address.", translation: "请通过在线门户通知我们，以免信件寄往过期地址。", note: "用 so that 目的从句和被动语态。" },
+  ],
+  school: [
+    { id: "school-advanced-1", speaker: "Parent", text: "Before enrolling my child, I would like to understand how learning support is provided when a student falls behind.", translation: "给孩子注册前，我想了解学生落后时学校如何提供学习支持。", note: "用 how 从句和 when 条件说明教育支持。" },
+    { id: "school-advanced-2", speaker: "Teacher", text: "Each student is assessed at the beginning of term so that individual support can be planned.", translation: "每名学生在学期初都会接受评估，以便制定个别支持计划。", note: "用被动语态和 so that 目的从句。" },
+    { id: "school-advanced-3", speaker: "Parent", text: "If the assessment identifies a persistent difficulty, would the school recommend specialist services?", translation: "如果评估发现持续性困难，学校会推荐专业服务吗？", note: "用 if 条件句和 would 委婉询问。" },
+    { id: "school-advanced-4", speaker: "Teacher", text: "We would first meet with the family, after which an appropriate referral could be arranged.", translation: "我们会先与家庭会面，之后可以安排适当的转介。", note: "用 after which 和情态被动。" },
+    { id: "school-advanced-5", speaker: "Parent", text: "Could you clarify how progress is communicated to parents who cannot attend weekday meetings?", translation: "您能说明无法参加工作日会议的家长如何获知进展吗？", note: "用关系从句和 how 从句。" },
+    { id: "school-advanced-6", speaker: "Teacher", text: "Updates are shared through the parent portal, and additional meetings can be scheduled online.", translation: "进展会通过家长门户分享，也可以在线安排额外会议。", note: "用并列被动语态。" },
+    { id: "school-advanced-7", speaker: "Parent", text: "I am concerned that a heavy homework load might discourage him rather than improve his confidence.", translation: "我担心过重的作业量可能让他气馁，而不是增强信心。", note: "用 that 从句、might 和 rather than 表达担忧。" },
+    { id: "school-advanced-8", speaker: "Teacher", text: "That is a valid concern; assignments are adjusted when the workload begins to affect motivation.", translation: "这是合理的担忧；当作业量开始影响动力时，我们会调整作业。", note: "用 when 从句和被动语态。" },
+    { id: "school-advanced-9", speaker: "Parent", text: "I appreciate that flexibility, especially since he learns best when instructions are broken into manageable steps.", translation: "我很感谢这种灵活性，尤其是他把指令分成可处理的小步骤时学得最好。", note: "用 since 和 when 从句解释学习条件。" },
+    { id: "school-advanced-10", speaker: "Teacher", text: "We will include that preference in his learning plan and review it with you each term.", translation: "我们会把这个偏好写入他的学习计划，并每学期与您一起复查。", note: "用 include、review 和时间状语完成正式收束。" },
+  ],
+};
+
 const GREETINGS_BY_LEVEL: Record<LevelKey, PracticeLine[]> = {
   beginner: SCENE_CONTENT.greetings.slice(0, 10),
   intermediate: [
@@ -564,7 +651,8 @@ export function getLevelLabel(level: LevelKey) { return LEVELS.find((item) => it
 export function getSceneLines(scene: SceneKey) { return SCENE_CONTENT[scene]; }
 export function getPracticeDialogue(scene: SceneKey, level: LevelKey = "beginner") {
   if (scene === "greetings") return GREETINGS_BY_LEVEL[level];
-  const offset = level === "beginner" ? 0 : level === "intermediate" ? 10 : 20;
+  if (level === "advanced" && ADVANCED_BY_SCENE[scene]) return ADVANCED_BY_SCENE[scene]!;
+  const offset = level === "beginner" ? 0 : 10;
   return SCENE_CONTENT[scene].slice(offset, offset + 10);
 }
 export const PRACTICE_DIALOGUE = getPracticeDialogue("greetings");
