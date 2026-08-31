@@ -13,32 +13,3 @@ export async function translateToEnglish(text: string) { const value = text.trim
 async function readAudio(uri: string) { if (!uri) throw new Error("æ²¡æœ‰æ‰¾åˆ°çœŸå®å½•éŸ³æ–‡ä»¶ï¼Œè¯·é‡æ–°å½•åˆ¶ã€‚"); const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); if (!audioBase64) throw new Error("å½•éŸ³æ–‡ä»¶ä¸ºç©ºï¼Œè¯·é‡æ–°å½•åˆ¶ã€‚"); return audioBase64; }
 export async function evaluateRecording(uri: string, targetSentence: string, mimeType = "audio/mp4") { return callMutation<EvaluationResult>("voice.evaluate", { audioBase64: await readAudio(uri), mimeType, targetSentence, language: "en" }); }
 export async function transcribeRecording(uri: string, mimeType = "audio/mp4", language: "auto" | "en" | "zh" = "auto") { return callMutation<{ text: string; duration?: number }>("voice.transcribe", { audioBase64: await readAudio(uri), mimeType, language }); }
-
-export async function checkGrammarError(userInput: string): Promise<{ hasError: boolean; correctedText: string; explanation: string }> {
-  try {
-    const prompt = Çë·ÖÎöÒÔÏÂÓÃ»§µÄÓ¢Óï¿ÚÓï±í´ïÊÇ·ñÓĞÓï·¨¡¢´Ê»ã»òÆ´Ğ´´íÎó¡£
-ÓÃ»§ÊäÈë: ""
-
-¸ñÊ½ÒªÇó:
-Èç¹ûÍêÈ«ÎŞÎó£¬Çë½ö»Ø¸´: NO_ERROR
-Èç¹ûÓĞ´í£¬Çë°´ÒÔÏÂ¸ñÊ½»Ø¸´:
-CORRECTED: [ĞŞ¸ÄºóµÄ±ê×¼µØµÀ¾ä×Ó]
-EXPLANATION: [¼òÃ÷¶óÒªµÄÖĞÎÄ½âÎö´íÎóÔ­Òò];
-
-    const response = await fetchAiResponse(prompt);
-    if (response.includes("NO_ERROR")) {
-      return { hasError: false, correctedText: userInput, explanation: "±í´ï·Ç³£µØµÀ£¬Ã»ÓĞ·¢ÏÖÓï·¨´íÎó£¡" };
-    }
-    
-    const correctedMatch = response.match(/CORRECTED:\s*(.+)/);
-    const explanationMatch = response.match(/EXPLANATION:\s*(.+)/);
-    
-    return {
-      hasError: true,
-      correctedText: correctedMatch ? correctedMatch[1].trim() : userInput,
-      explanation: explanationMatch ? explanationMatch[1].trim() : response
-    };
-  } catch (error) {
-    return { hasError: false, correctedText: userInput, explanation: "¾À´í·şÎñÔİ²»¿ÉÓÃ£¬ÇëÉÔºóÔÙÊÔ¡£" };
-  }
-}
