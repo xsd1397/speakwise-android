@@ -59,29 +59,29 @@ function CorrectionCard({ original, corrected }: { original: string; corrected: 
 type ReplyHint = { text: string; translation: string };
 function buildReplyHints(reply: string): ReplyHint[] {
   const source = reply.replace(/\s+/g, " ").trim();
-  const quoted = source.length > 72 ? `${source.slice(0, 69)}…` : source;
+  const quoted = source.length > 72 ? `${source.slice(0, 69)}...` : source;
   const lower = source.toLowerCase();
   if (/\b(what|where|when|why|how|could|would|do you|are you|have you)\b|[?？]/i.test(source)) {
     return [
-      { text: `To answer your question about “${quoted}”, I would like to share my own experience.`, translation: `关于“${quoted}”这个问题，我想分享一下自己的经历。` },
-      { text: `That is an interesting point about “${quoted}”; could you tell me more about it?`, translation: `关于“${quoted}”这一点很有意思；你能再多告诉我一些吗？` },
+      { text: `To answer your question about "${quoted}", I would like to share my own experience.`, translation: `关于"${quoted}"这个问题，我想分享一下自己的经历。` },
+      { text: `That is an interesting point about "${quoted}"; could you tell me more about it?`, translation: `关于"${quoted}"这一点很有意思；你能再多告诉我一些吗？` },
     ];
   }
   if (/\b(recommend|suggest|advice|should|need to|try|remember)\b/i.test(lower)) {
     return [
-      { text: `Your suggestion about “${quoted}” makes sense, and I will try it.`, translation: `你关于“${quoted}”的建议很有道理，我会试试看。` },
-      { text: `Before I decide about “${quoted}”, could you explain the main benefit?`, translation: `在决定“${quoted}”之前，你能解释一下主要好处吗？` },
+      { text: `Your suggestion about "${quoted}" makes sense, and I will try it.`, translation: `你关于"${quoted}"的建议很有道理，我会试试看。` },
+      { text: `Before I decide about "${quoted}", could you explain the main benefit?`, translation: `在决定"${quoted}"之前，你能解释一下主要好处吗？` },
     ];
   }
   if (/\b(problem|issue|difficult|concern|emergency|injured|unsafe|warning)\b/i.test(lower)) {
     return [
-      { text: `I understand the concern about “${quoted}”, and I will follow your instructions.`, translation: `我理解你对“${quoted}”的担忧，会按照你的指示去做。` },
-      { text: `Regarding “${quoted}”, what should I do first to stay safe?`, translation: `关于“${quoted}”，为了安全起见我首先应该做什么？` },
+      { text: `I understand the concern about "${quoted}", and I will follow your instructions.`, translation: `我理解你对"${quoted}"的担忧，会按照你的指示去做。` },
+      { text: `Regarding "${quoted}", what should I do first to stay safe?`, translation: `关于"${quoted}"，为了安全起见我首先应该做什么？` },
     ];
   }
   return [
-    { text: `I agree with your point about “${quoted}”, and I can give an example.`, translation: `我同意你关于“${quoted}”的观点，也可以举一个例子。` },
-    { text: `I would like to add one detail about “${quoted}” from my own experience.`, translation: `关于“${quoted}”，我想根据自己的经历再补充一个细节。` },
+    { text: `I agree with your point about "${quoted}", and I can give an example.`, translation: `我同意你关于"${quoted}"的观点，也可以举一个例子。` },
+    { text: `I would like to add one detail about "${quoted}" from my own experience.`, translation: `关于"${quoted}"，我想根据自己的经历再补充一个细节。` },
   ];
 }
 
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
   levelTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, 
   levelSub: { color: COLORS.muted, marginTop: 4 }, 
   sceneGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, 
-  scene: { width: "31%", minH: 86, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 10, marginTop: 10 }, 
+  scene: { width: "31%", minHeight: 86, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 10, marginTop: 10 }, 
   sceneTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14 }, 
   sceneSub: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 6 }, 
   eyebrow: { color: "#7EA5FF", fontSize: 12, fontWeight: "900", marginTop: 4 }, 
@@ -465,4 +465,47 @@ const styles = StyleSheet.create({
   translation: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7 }, 
   primary: { backgroundColor: COLORS.blue, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 }, 
   primaryText: { color: "#fff", fontWeight: "900" }, 
-  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "*
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, 
+  sectionTitle: { color: COLORS.text, fontSize: 19, fontWeight: "900", marginTop: 4 }, 
+  muted: { color: COLORS.muted, fontSize: 12 }, 
+  line: { borderTopWidth: 1, borderTopColor: "#292C33", paddingVertical: 15 }, 
+  lineTop: { flexDirection: "row", gap: 8, alignItems: "center" }, 
+  speaker: { color: "#8DB0FF", fontWeight: "900" }, 
+  role: { color: COLORS.muted, fontSize: 11 }, 
+  actions: { flexDirection: "row", gap: 8, marginTop: 11 }, 
+  action: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 }, 
+  actionText: { color: COLORS.text, fontSize: 11, fontWeight: "800" }, 
+  recording: { backgroundColor: "#8B3D4A", borderColor: "#D46B7A" }, 
+  helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 7 }, 
+  thread: { gap: 8, marginTop: 14 }, 
+  aiCard: { minHeight: 430 }, 
+  hints: { gap: 6, marginTop: 8 }, 
+  hint: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 9 }, 
+  bubble: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border }, 
+  user: { backgroundColor: "#17213A" }, 
+  assistant: { backgroundColor: "#191B20" }, 
+  inputRow: { flexDirection: "row", gap: 8, marginTop: 14 }, 
+  input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 }, 
+  send: { backgroundColor: COLORS.blue, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" }, 
+  recordStatus: { color: COLORS.muted, textAlign: "center" }, 
+  error: { color: "#FF9CA9", fontSize: 12, marginTop: 8 }, 
+  score: { backgroundColor: "#182C25", padding: 14, borderRadius: 14 }, 
+  scoreValue: { color: "#73E2A8", fontSize: 38, fontWeight: "900" }, 
+  backTop: { alignSelf: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 }, 
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, 
+  wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, 
+  wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, 
+  phonetic: { color: "#8DB0FF", fontSize: 18 }, 
+  wordMeaning: { color: COLORS.text, fontSize: 16 }, 
+  modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 },
+  correctionCard: { backgroundColor: COLORS.correctionBg, borderRadius: 12, borderWidth: 1, borderColor: COLORS.correctionBorder, marginTop: 10, overflow: "hidden" },
+  correctionHeader: { backgroundColor: COLORS.correctionBorder, padding: 6, paddingHorizontal: 10 },
+  correctionTitle: { color: "#fff", fontSize: 12, fontWeight: "900" },
+  correctionBody: { padding: 10, gap: 4 },
+  correctionLabel: { color: COLORS.muted, fontSize: 11 },
+  correctionOriginal: { color: "#FFB15C", fontSize: 13, fontStyle: "italic" },
+  correctionCorrected: { color: COLORS.success, fontSize: 14, fontWeight: "700" },
+  correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 }
+});
+
+// === END OF FILE ===
