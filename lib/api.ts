@@ -13,3 +13,30 @@ export async function translateToEnglish(text: string) { const value = text.trim
 async function readAudio(uri: string) { if (!uri) throw new Error("没有找到真实录音文件，请重新录制。"); const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); if (!audioBase64) throw new Error("录音文件为空，请重新录制。"); return audioBase64; }
 export async function evaluateRecording(uri: string, targetSentence: string, mimeType = "audio/mp4") { return callMutation<EvaluationResult>("voice.evaluate", { audioBase64: await readAudio(uri), mimeType, targetSentence, language: "en" }); }
 export async function transcribeRecording(uri: string, mimeType = "audio/mp4", language: "auto" | "en" | "zh" = "auto") { return callMutation<{ text: string; duration?: number }>("voice.transcribe", { audioBase64: await readAudio(uri), mimeType, language }); }
+
+export async function checkGrammarError(userInput: string): Promise<{ hasError: boolean; correctedText: string; explanation: string }> {
+  try {
+    const prompt = `请分析以下用户的英语口语表达是否有语法、词汇或拼写错误。
+用户输入: "${userInput}"
+
+格式要求:
+如果完全无误，请仅回复: NO_ERROR
+如果有错，请按以下格式回复:
+CORRECTED: [修改后的标准地道句子]
+EXPLANATION: [简明扼要的中文解析错误原因]`;
+
+    const response = await fetchAiResponse(prompt);
+    if (response.includes("NO_ERROR")) {
+      return { hasError: false, correctedText: userInput, explanation: "表达非常地道，没有发现语法错误！" };
+    }
+    const correctedMatch = response.match(/CORRECTED:\s*(.+)/);
+    const explanationMatch = response.match(/EXPLANATION:\s*(.+)/);
+    return {
+      hasError: true,
+      correctedText: correctedMatch ? correctedMatch[1].trim() : userInput,
+      explanation: explanationMatch ? explanationMatch[1].trim() : response
+    };
+  } catch (error) {
+    return { hasError: false, correctedText: userInput, explanation: "纠错服务暂不可用，请稍后再试。" };
+  }
+}
