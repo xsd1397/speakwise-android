@@ -58,7 +58,6 @@ function CorrectionCard({ original, corrected }: { original: string; corrected: 
 }
 
 export default function PracticeScreen() {
-  // --- 基础状态 ---
   const scrollRef = useRef<ScrollView>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 250);
@@ -88,13 +87,11 @@ export default function PracticeScreen() {
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
-  // --- 移植：统计状态 (Daily Stats) ---
   const [stats, setStats] = useState({ rounds: 0, recordings: 0, scores: [] as number[] });
   const averageScore = stats.scores.length > 0 
     ? Math.round(stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length) 
     : null;
 
-  // --- 移植：AI 建议与草稿状态 ---
   const [replySuggestions, setReplySuggestions] = useState<string[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [englishDraft, setEnglishDraft] = useState<{ source: string; translation: string } | null>(null);
@@ -208,13 +205,11 @@ export default function PracticeScreen() {
     } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "无法开始录音，请检查麦克风权限。"); } 
   };
 
-  // --- 移植：英文草稿确认流程 ---
   const handleSendReply = async () => {
     const rawMessage = input.trim(); 
     if (!rawMessage || replyLoading || translationLoading) return; 
     setReplyError(null); 
 
-    // 如果是中文且没有草稿，则先生成草稿
     if (/[\u3400-\u9fff]/.test(rawMessage) && !englishDraft) {
       setTranslationLoading(true);
       try {
@@ -229,7 +224,6 @@ export default function PracticeScreen() {
       return;
     }
 
-    // 正式发送
     setInput("");
     setEnglishDraft(null);
     setReplyLoading(true);
@@ -252,7 +246,6 @@ export default function PracticeScreen() {
     } catch (e) { setReplyError(e instanceof Error ? e.message : "AI 对话暂时不可用。"); } finally { setReplyLoading(false); } 
   };
 
-  // --- 移植：回复建议系统 ---
   const requestSuggestions = async () => {
     const latestAssistant = [...dialogue].reverse().find(m => m.role === "assistant");
     if (!latestAssistant) return;
@@ -396,7 +389,6 @@ export default function PracticeScreen() {
               )}
             </View>
             
-            {/* 移植：建议回复区域 */}
             {replySuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
                 <Text style={styles.suggestionsTitle}>💡 AI 回复建议</Text>
@@ -411,11 +403,6 @@ export default function PracticeScreen() {
                     </Pressable>
                   ))}
                 </View>
-                {selectedWord && (
-                   <Pressable style={styles.clearSuggestions} onPress={() => setReplySuggestions([])}>
-                     <Text style={styles.clearText}>清除建议</Text>
-                   </Pressable>
-                )}
               </View>
             )}
 
@@ -434,7 +421,6 @@ export default function PracticeScreen() {
               </Pressable>
             </View>
 
-            {/* 移植：英文草稿确认卡片 */}
             {englishDraft && (
               <View style={styles.draftCard}>
                 <View style={styles.draftHeader}>
@@ -500,7 +486,7 @@ const styles = StyleSheet.create({
   kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, 
   wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, 
   statsHeader: { flexDirection: "row", gap: 12 },
-  statItem: { color: COLORS.muted, fontSize: 11, fontWeight: "700", backgroundColor: COLORS.panel, padding: "4px 8px", borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
+  statItem: { color: COLORS.muted, fontSize: 11, fontWeight: "700", backgroundColor: COLORS.panel, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, 
   selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, padding: 14, backgroundColor: COLORS.panel }, 
   sectionLabel: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, 
@@ -552,33 +538,4 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, 
   wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, 
   wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, 
-  phonetic: { color: "#8DB0FF", fontSize: 18 }, 
-  wordMeaning: { color: COLORS.text, fontSize: 16 }, 
-  modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 },
-  correctionCard: { backgroundColor: COLORS.correctionBg, borderRadius: 12, borderWidth: 1, borderColor: COLORS.correctionBorder, marginTop: 10, overflow: "hidden" },
-  correctionHeader: { backgroundColor: COLORS.correctionBorder, padding: 6, paddingHorizontal: 10 },
-  correctionTitle: { color: "#fff", fontSize: 12, fontWeight: "900" },
-  correctionBody: { padding: 10, gap: 4 },
-  correctionLabel: { color: COLORS.muted, fontSize: 11 },
-  correctionOriginal: { color: "#FFB15C", fontSize: 13, fontStyle: "italic" },
-  correctionCorrected: { color: COLORS.success, fontSize: 14, fontWeight: "700" },
-  correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 },
-  // --- 新增：移植功能样式 ---
-  suggestionsContainer: { marginTop: 15, gap: 8 },
-  suggestionsTitle: { color: COLORS.orange, fontSize: 12, fontWeight: "800" },
-  suggestionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  suggestionChip: { backgroundColor: COLORS.panel2, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", minWidth: 100, maxWidth: "45%" },
-  suggestionText: { color: COLORS.text, fontSize: 11, fontWeight: "600", flex: 1 },
-  suggestionActions: { flexDirection: "row", gap: 4, marginLeft: 6 },
-  suggestionSmallText: { color: COLORS.muted, fontSize: 10 },
-  clearSuggestions: { alignSelf: "flex-end", marginTop: 4 },
-  clearText: { color: COLORS.muted, fontSize: 10, textDecorationLine: "underline" },
-  draftCard: { backgroundColor: COLORS.blueSoft, borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: COLORS.blue },
-  draftHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  draftTitle: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  draftClose: { color: "#fff", fontSize: 14 },
-  draftSource: { color: "#AABBEF", fontSize: 11, marginBottom: 4 },
-  draftTranslation: { color: "#fff", fontSize: 13, fontWeight: "700", marginBottom: 10 },
-  draftButton: { backgroundColor: "#fff", borderRadius: 6, padding: 6, alignItems: "center" },
-  draftButtonText: { color: COLORS.blueSoft, fontSize: 11, fontWeight: "800" }
-});
+  phonetic:
