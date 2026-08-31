@@ -422,24 +422,4 @@ export default function PracticeScreen() {
               </Pressable>
               <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}>
                 <Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
-              </Pressable>
-            </View>
-            <Pressable onPress={() => setSelectedWord(null)}>
-              <Text style={styles.muted}>关闭卡片</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </ModalComponent>
-    </ScreenContainer>
-  );
-}
-
-const styles = StyleSheet.create({ 
-  flex: { flex: 1 }, 
-  content: { padding: 18, paddingBottom: 40, gap: 16, backgroundColor: COLORS.bg }, 
-  nav: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, 
-  brand: { color: COLORS.text, fontSize: 23, fontWeight: "900" }, 
-  kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, 
-  wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, 
-  breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, 
-  selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius:*
+              </Pressable*
