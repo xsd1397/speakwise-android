@@ -30,6 +30,24 @@ function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" {
   return ["Mia", "Agent", "Lee", "Landlord", "Receptionist", "Banker", "Server", "StationAgent", "Clerk", "Teacher"].includes(speaker) ? "Mia" : "Alex"; 
 }
 
+// --- 移植：网页端词典匹配逻辑 ---
+const lookupWordLocal = (rawWord: string) => {
+  const clean = rawWord.replace(/[^a-zA-Z]/g, "").toLowerCase();
+  if (!clean) return null;
+  const def = getWordDefinition(clean);
+  if (def) return { word: clean, ...def };
+
+  const suffixes = ["ies", "es", "s", "ed", "ing", "ly", "er", "est"];
+  for (const suffix of suffixes) {
+    if (clean.endsWith(suffix) && clean.length - suffix.length >= 2) {
+      const base = clean.slice(0, clean.length - suffix.length);
+      const baseDef = getWordDefinition(base);
+      if (baseDef) return { word: clean, ...baseDef, meaning: `${baseDef.meaning}（变形）` };
+    }
+  }
+  return { word: clean, phonetic: "/.../", meaning: "查询中..." };
+};
+
 function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) { 
   return (
     <Text style={styles.sentence}>
@@ -122,9 +140,9 @@ export default function PracticeScreen() {
     if (!selectedWord) { setSelectedDefinition(null); setSelectedExample(""); return; } 
     let active = true;
     const fetchDefinition = async () => {
-      const localDef = getWordDefinition(selectedWord);
-      setSelectedDefinition(localDef);
-      if (!localDef || !localDef.meaning) {
+      const info = lookupWordLocal(selectedWord);
+      setSelectedDefinition(info ? { ...info } : null);
+      if (!info || !info.meaning || info.meaning === "查询中...") {
         const translated = await translateToChinese(selectedWord);
         if (active) {
           setSelectedDefinition(prev => prev ? { ...prev, meaning: translated } : { meaning: translated, phonetic: "N/A" });
@@ -392,7 +410,7 @@ export default function PracticeScreen() {
             {replySuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
                 <Text style={styles.suggestionsTitle}>💡 AI 回复建议</Text>
-                <View style={styles.suggestionsRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsRow}>
                   {replySuggestions.map((s, i) => (
                     <Pressable key={i} style={styles.suggestionChip} onPress={() => { setInput(s); setEnglishDraft(null); }}>
                       <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
@@ -402,7 +420,7 @@ export default function PracticeScreen() {
                       </View>
                     </Pressable>
                   ))}
-                </View>
+                </ScrollView>
               </View>
             )}
 
@@ -454,26 +472,32 @@ export default function PracticeScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
-      <ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWord(null)}>
-          <View style={styles.wordCard}>
-            <Text style={styles.wordTitle}>{selectedWord}</Text>
-            <Text style={styles.phonetic}>{selectedDefinition?.phonetic ?? "查询中..."}</Text>
-            <Text style={styles.wordMeaning}>{selectedDefinition?.meaning ?? "查询中..."}</Text>
-            <View style={styles.row}>
-              <Pressable onPress={() => selectedWord && speak(selectedWord)} style={styles.modalButton}>
-                <Text style={styles.actionText}>朗读单词</Text>
-              </Pressable>
-              <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}>
-                <Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
+      
+      {/* 移植：轻量级单词气泡弹窗 */}
+      {selectedWord && (
+        <View style={styles.floatingBubble}>
+          <View style={styles.bubbleContent}>
+            <View style={styles.bubbleHeader}>
+              <Text style={styles.bubbleWord}>{selectedWord}</Text>
+              <Text style={styles.bubblePhonetic}>{selectedDefinition?.phonetic ?? "..."}</Text>
+              <Pressable onPress={() => speak(selectedWord)} style={styles.bubbleAudioBtn}>
+                <Text style={{color: '#fff'}}>🔊</Text>
               </Pressable>
             </View>
-            <Pressable onPress={() => setSelectedWord(null)}>
-              <Text style={styles.muted}>关闭卡片</Text>
-            </Pressable>
+            <Text style={styles.bubbleMeaning}>{selectedDefinition?.meaning ?? "查询中..."}</Text>
+            <View style={styles.bubbleFooter}>
+              <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.bubbleSaveBtn}>
+                <Text style={styles.bubbleSaveText}>{hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
+              </Pressable>
+              <Pressable onPress={() => setSelectedWord(null)} style={styles.bubbleCloseBtn}>
+                <Text style={styles.bubbleCloseText}>✕</Text>
+              </Pressable>
+            </View>
           </View>
-        </Pressable>
-      </ModalComponent>
+        </View>
+      )}
+
+      <ModalComponent visible={false} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)} />
     </ScreenContainer>
   );
 }
@@ -551,8 +575,8 @@ const styles = StyleSheet.create({
   correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 },
   suggestionsContainer: { marginTop: 15, gap: 8 },
   suggestionsTitle: { color: COLORS.orange, fontSize: 12, fontWeight: "800" },
-  suggestionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  suggestionChip: { backgroundColor: COLORS.panel2, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", minWidth: 100, maxWidth: "45%" },
+  suggestionsRow: { flexDirection: "row", gap: 8 },
+  suggestionChip: { backgroundColor: COLORS.panel2, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "90%" },
   suggestionText: { color: COLORS.text, fontSize: 11, fontWeight: "600", flex: 1 },
   suggestionActions: { flexDirection: "row", gap: 4, marginLeft: 6 },
   suggestionSmallText: { color: COLORS.muted, fontSize: 10 },
@@ -565,5 +589,18 @@ const styles = StyleSheet.create({
   draftSource: { color: "#AABBEF", fontSize: 11, marginBottom: 4 },
   draftTranslation: { color: "#fff", fontSize: 13, fontWeight: "700", marginBottom: 10 },
   draftButton: { backgroundColor: "#fff", borderRadius: 6, padding: 6, alignItems: "center" },
-  draftButtonText: { color: COLORS.blueSoft, fontSize: 11, fontWeight: "800" }
+  draftButtonText: { color: COLORS.blueSoft, fontSize: 11, fontWeight: "800" },
+  // --- 移植：气泡词典样式 ---
+  floatingBubble: { position: "absolute", bottom: 100, alignSelf: "center", zIndex: 100, width: "80%" },
+  bubbleContent: { backgroundColor: COLORS.panel2, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 },
+  bubbleHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
+  bubbleWord: { color: COLORS.text, fontSize: 16, fontWeight: "800", capitalize: "capitalize" },
+  bubblePhonetic: { color: "#8DB0FF", fontSize: 13, fontFamily: "monospace" },
+  bubbleAudioBtn: { backgroundColor: COLORS.blue, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  bubbleMeaning: { color: COLORS.text, fontSize: 14, lineHeight: 20, marginBottom: 10 },
+  bubbleFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8 },
+  bubbleSaveBtn: { backgroundColor: COLORS.blueSoft, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  bubbleSaveText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  bubbleCloseBtn: { padding: 4 },
+  bubbleCloseText: { color: COLORS.muted, fontSize: 14 }
 });
