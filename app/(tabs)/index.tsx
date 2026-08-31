@@ -417,7 +417,7 @@ export default function PracticeScreen() {
                 <Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text>
               </Pressable>
               <Pressable onPress={requestSuggestions} style={styles.action} disabled={suggestionsLoading}>
-                <Text style={styles.actionText}>{suggestionsLoading ? "生成中..." : "💡 建议"}</Text>
+                <Text style={styles.actionText}>{suggestionsLoading ? "生成中..." : "回复提示"}</Text>
               </Pressable>
             </View>
 
