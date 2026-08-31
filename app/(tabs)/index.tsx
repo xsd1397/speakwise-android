@@ -410,6 +410,7 @@ export default function PracticeScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
       <ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWord(null)}>
           <View style={styles.wordCard}>
@@ -422,4 +423,46 @@ export default function PracticeScreen() {
               </Pressable>
               <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}>
                 <Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
-              </Pressable*
+              </Pressable>
+            </View>
+            <Pressable onPress={() => setSelectedWord(null)}>
+              <Text style={styles.muted}>关闭卡片</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </ModalComponent>
+    </ScreenContainer>
+  );
+}
+
+const styles = StyleSheet.create({ 
+  flex: { flex: 1 }, 
+  content: { padding: 18, paddingBottom: 40, gap: 16, backgroundColor: COLORS.bg }, 
+  nav: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, 
+  brand: { color: COLORS.text, fontSize: 23, fontWeight: "900" }, 
+  kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, 
+  wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, 
+  breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, 
+  selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, padding: 14, backgroundColor: COLORS.panel }, 
+  sectionLabel: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, 
+  row: { flexDirection: "row", gap: 10 }, 
+  level: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginTop: 12 }, 
+  active: { backgroundColor: COLORS.blue, borderColor: "#78A1FF" }, 
+  levelTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, 
+  levelSub: { color: COLORS.muted, marginTop: 4 }, 
+  sceneGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, 
+  scene: { width: "31%", minH: 86, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 10, marginTop: 10 }, 
+  sceneTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14 }, 
+  sceneSub: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 6 }, 
+  eyebrow: { color: "#7EA5FF", fontSize: 12, fontWeight: "900", marginTop: 4 }, 
+  heroTitle: { color: COLORS.text, fontSize: 32, fontWeight: "900", marginTop: 2 }, 
+  heroSub: { color: COLORS.muted, fontSize: 14, lineHeight: 21 }, 
+  target: { backgroundColor: "#162A57", borderRadius: 18, padding: 18, borderWidth: 1, borderColor: "#426FD4" }, 
+  card: { backgroundColor: COLORS.panel, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, padding: 16 }, 
+  cardLabel: { color: "#A9C1FF", fontWeight: "900" }, 
+  sentence: { color: COLORS.text, fontSize: 19, lineHeight: 29, fontWeight: "700", marginTop: 9 }, 
+  word: { color: COLORS.text }, 
+  translation: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7 }, 
+  primary: { backgroundColor: COLORS.blue, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 }, 
+  primaryText: { color: "#fff", fontWeight: "900" }, 
+  cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "*
