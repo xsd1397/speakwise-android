@@ -23,13 +23,13 @@ async function callMutation<T>(procedure: string, input: unknown): Promise<T> {
   return result; 
 }
 
-// 1. 对话回复
-export async function replyToDialogue(input: { level: "beginner" | "intermediate" | "advanced"; scene: "greetings" | "travel" | "business" | "housing" | "medical" | "banking" | "shopping" | "transit" | "government" | "school"; history: DialogueMessage[]; userMessage: string }) { 
+// 1. 对话回复 - 将 scene 类型改为 string 以兼容所有场景
+export async function replyToDialogue(input: { level: string; scene: string; history: DialogueMessage[]; userMessage: string }) { 
   return callMutation<{ reply: string; translation?: string; correction?: string; correctedEnglish?: string }>("dialogue.reply", input); 
 }
 
-// 2. [新增] 获取回复建议 (移植自网页端)
-export async function getReplySuggestions(input: { level: "beginner" | "intermediate" | "advanced"; scene: "greetings" | "travel" | "business" | "housing" | "medical" | "banking" | "shopping" | "transit" | "government" | "school"; history: DialogueMessage[]; aiMessage: string }) { 
+// 2. 获取回复建议 - 将 scene 类型改为 string 以兼容所有场景
+export async function getReplySuggestions(input: { level: string; scene: string; history: DialogueMessage[]; aiMessage: string }) { 
   return callMutation<{ suggestions: string[] }>("dialogue.suggestions", input); 
 }
 
