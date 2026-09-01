@@ -399,15 +399,20 @@ export default function PracticeScreen() {
             )}
 
             <View style={styles.inputRow}>
-              <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
-              <Pressable onPress={sendAiRecording} style={[styles.send, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
-                <Text style={styles.primaryText}>{aiRecording ? "■ 停止" : "🎙 录音"}</Text>
+              <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" multiline />
+              <Pressable onPress={() => handleSendReply()} style={styles.iconSend} accessibilityLabel="发送 AI 对话回复">
+                {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendIcon}>➤</Text>}
               </Pressable>
-              <Pressable onPress={() => setShowSuggestions((prev) => !prev)} style={styles.send} accessibilityLabel="提示">
-                <Text style={styles.primaryText}>{showSuggestions ? "收起" : "提示"}</Text>
+            </View>
+            <View style={styles.aiControlsRow}>
+              <Pressable onPress={sendAiRecording} style={[styles.action, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
+                <Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text>
               </Pressable>
-              <Pressable onPress={() => handleSendReply()} style={styles.send} accessibilityLabel="发送 AI 对话回复">
-                {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>发送</Text>}
+              <Pressable onPress={() => {
+                if (!showSuggestions && suggestionsList.length === 0) requestSuggestions();
+                else setShowSuggestions((prev) => !prev);
+              }} style={styles.action} accessibilityLabel="提示">
+                <Text style={styles.actionText}>{suggestionsLoading ? "加载中…" : showSuggestions ? "收起提示" : "提示"}</Text>
               </Pressable>
             </View>
 
@@ -491,8 +496,11 @@ const styles = StyleSheet.create({
   bubble: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border }, 
   user: { backgroundColor: "#17213A" }, 
   assistant: { backgroundColor: "#191B20" }, 
-  inputRow: { flexDirection: "row", gap: 8, marginTop: 14 }, 
-  input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 }, 
+  inputRow: { flexDirection: "row", gap: 8, marginTop: 14, alignItems: "flex-end" },
+  input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, minHeight: 96, maxHeight: 180, textAlignVertical: "top" },
+  iconSend: { backgroundColor: COLORS.blue, borderRadius: 22, width: 46, height: 46, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  sendIcon: { color: "#fff", fontSize: 24, fontWeight: "900" },
+  aiControlsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   send: { backgroundColor: COLORS.blue, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" }, 
   recordStatus: { color: COLORS.muted, textAlign: "center" }, 
   error: { color: "#FF9CA9", fontSize: 12, marginTop: 8 }, 

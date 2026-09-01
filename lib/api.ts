@@ -40,7 +40,7 @@ export interface PreflightResult {
 
 // 获取配置的 API Base URL
 export function getApiBaseUrl(): string {
-  return process.env.EXPO_PUBLIC_API_URL || '';
+  return process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_API_URL || '';
 }
 
 // 评估录音评分
