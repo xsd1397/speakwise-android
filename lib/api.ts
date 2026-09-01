@@ -27,9 +27,15 @@ export interface SuggestionsResponse {
   suggestions: string[];
 }
 
+export interface PreflightResult {
+  correctedText?: string;
+  suggestion?: string;
+  hasErrors?: boolean;
+  explanation?: string;
+}
+
 // 获取配置的 API Base URL
 export function getApiBaseUrl(): string {
-  // 根据你的实际环境变量或配置修改
   return process.env.EXPO_PUBLIC_API_URL || '';
 }
 
@@ -90,6 +96,29 @@ export async function getReplySuggestions(params: {
 
   if (!res.ok) throw new Error('获取建议失败');
   return res.json();
+}
+
+// 预检/纠错检查（用于 ChatControlBar 组件）
+export async function processPreflightCheck(
+  text: string
+): Promise<PreflightResult> {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
+    return { correctedText: text, hasErrors: false };
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/api/preflight`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!res.ok) throw new Error('预检请求失败');
+    return await res.json();
+  } catch {
+    return { correctedText: text, hasErrors: false };
+  }
 }
 
 // 录音转文字 (STT)
