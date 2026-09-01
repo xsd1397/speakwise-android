@@ -30,24 +30,6 @@ function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" {
   return ["Mia", "Agent", "Lee", "Landlord", "Receptionist", "Banker", "Server", "StationAgent", "Clerk", "Teacher"].includes(speaker) ? "Mia" : "Alex"; 
 }
 
-// --- 移植：网页端词典匹配逻辑 ---
-const lookupWordLocal = (rawWord: string) => {
-  const clean = rawWord.replace(/[^a-zA-Z]/g, "").toLowerCase();
-  if (!clean) return null;
-  const def = getWordDefinition(clean);
-  if (def) return { word: clean, ...def };
-
-  const suffixes = ["ies", "es", "s", "ed", "ing", "ly", "er", "est"];
-  for (const suffix of suffixes) {
-    if (clean.endsWith(suffix) && clean.length - suffix.length >= 2) {
-      const base = clean.slice(0, clean.length - suffix.length);
-      const baseDef = getWordDefinition(base);
-      if (baseDef) return { word: clean, ...baseDef, meaning: `${baseDef.meaning}（变形）` };
-    }
-  }
-  return { word: clean, phonetic: "/.../", meaning: "查询中..." };
-};
-
 function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) { 
   return (
     <Text style={styles.sentence}>
@@ -140,9 +122,9 @@ export default function PracticeScreen() {
     if (!selectedWord) { setSelectedDefinition(null); setSelectedExample(""); return; } 
     let active = true;
     const fetchDefinition = async () => {
-      const info = lookupWordLocal(selectedWord);
-      setSelectedDefinition(info ? { ...info } : null);
-      if (!info || !info.meaning || info.meaning === "查询中...") {
+      const localDef = getWordDefinition(selectedWord);
+      setSelectedDefinition(localDef);
+      if (!localDef || !localDef.meaning) {
         const translated = await translateToChinese(selectedWord);
         if (active) {
           setSelectedDefinition(prev => prev ? { ...prev, meaning: translated } : { meaning: translated, phonetic: "N/A" });
@@ -435,7 +417,8 @@ export default function PracticeScreen() {
                 <Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text>
               </Pressable>
               <Pressable onPress={requestSuggestions} style={styles.action} disabled={suggestionsLoading}>
-                <Text style={styles.actionText}>{suggestionsLoading ? "生成中..." : "回复提示"}</Text>
+                <Text style={// @ts-ignore
+                  styles.actionText}>{suggestionsLoading ? "生成中..." : "回复提示"}</Text>
               </Pressable>
             </View>
 
@@ -473,7 +456,6 @@ export default function PracticeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       
-      {/* 移植：轻量级单词气泡弹窗 */}
       {selectedWord && (
         <View style={styles.floatingBubble}>
           <View style={styles.bubbleContent}>
@@ -590,11 +572,10 @@ const styles = StyleSheet.create({
   draftTranslation: { color: "#fff", fontSize: 13, fontWeight: "700", marginBottom: 10 },
   draftButton: { backgroundColor: "#fff", borderRadius: 6, padding: 6, alignItems: "center" },
   draftButtonText: { color: COLORS.blueSoft, fontSize: 11, fontWeight: "800" },
-  // --- 移植：气泡词典样式 ---
   floatingBubble: { position: "absolute", bottom: 100, alignSelf: "center", zIndex: 100, width: "80%" },
   bubbleContent: { backgroundColor: COLORS.panel2, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 },
   bubbleHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
-  bubbleWord: { color: COLORS.text, fontSize: 16, fontWeight: "800", capitalize: "capitalize" },
+  bubbleWord: { color: COLORS.text, fontSize: 16, fontWeight: "800", textTransform: "capitalize" },
   bubblePhonetic: { color: "#8DB0FF", fontSize: 13, fontFamily: "monospace" },
   bubbleAudioBtn: { backgroundColor: COLORS.blue, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   bubbleMeaning: { color: COLORS.text, fontSize: 14, lineHeight: 20, marginBottom: 10 },
