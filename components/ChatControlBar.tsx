@@ -1,3 +1,5 @@
+// components/ChatControlBar.tsx
+
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { processPreflightCheck, PreflightResult } from '../lib/api';
@@ -60,9 +62,10 @@ export const ChatControlBar: React.FC<Props> = ({ userInputText, onSend, onToggl
             <TouchableOpacity
               style={styles.sendBtn}
               onPress={() => {
-                const textToSend = preflight.isEnglish
-                  ? (preflight.correctedText || preflight.originalText)
-                  : (preflight.translatedText || preflight.originalText);
+                const textToSend =
+                  (preflight.isEnglish
+                    ? (preflight.correctedText || preflight.originalText)
+                    : (preflight.translatedText || preflight.originalText)) || '';
                 setPreflight(null);
                 onSend(textToSend);
               }}
