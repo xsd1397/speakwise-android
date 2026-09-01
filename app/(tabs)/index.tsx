@@ -393,32 +393,24 @@ export default function PracticeScreen() {
                     setInput(selectedText);
                     setShowSuggestions(false);
                   }}
+                  onSpeakSuggestion={(text) => speak(text, "Mia")}
                 />
               </View>
             )}
 
             <View style={styles.inputRow}>
               <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
-              {/* 👈 这里修复了无障碍属性：支持测试所期待的 "开始 AI 录音" 匹配 */}
               <Pressable onPress={sendAiRecording} style={[styles.send, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
                 <Text style={styles.primaryText}>{aiRecording ? "■ 停止" : "🎙 录音"}</Text>
+              </Pressable>
+              <Pressable onPress={() => setShowSuggestions((prev) => !prev)} style={styles.send} accessibilityLabel="提示">
+                <Text style={styles.primaryText}>{showSuggestions ? "收起" : "提示"}</Text>
               </Pressable>
               <Pressable onPress={() => handleSendReply()} style={styles.send} accessibilityLabel="发送 AI 对话回复">
                 {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>发送</Text>}
               </Pressable>
             </View>
 
-            <ChatControlBar
-              userInputText={input}
-              onSend={(finalText) => handleSendReply(finalText)}
-              onToggleSuggestions={() => {
-                if (!showSuggestions && suggestionsList.length === 0) {
-                  requestSuggestions();
-                } else {
-                  setShowSuggestions((prev) => !prev);
-                }
-              }}
-            />
 
             <Text style={styles.helper}>{aiRecordingMessage}</Text>
             {replyError && <Text style={styles.error}>{replyError}</Text>}
