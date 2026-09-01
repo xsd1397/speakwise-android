@@ -2,6 +2,7 @@
   "name": "speakwise-android",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "type": "module",
   "dependencies": {
     "expo": "~57.0.17",
     "expo-audio": "~57.0.4",

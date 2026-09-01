@@ -12,7 +12,6 @@ import { getSpeechRate, selectVoiceForSpeaker } from "../../lib/voice";
 import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "../../lib/word";
 import { useWordbook } from "../../lib/wordbook";
 
-const ModalComponent = Modal ?? View;
 const COLORS = { 
   bg: "#0B0C0F", 
   panel: "#111317", 
@@ -256,7 +255,6 @@ export default function PracticeScreen() {
         history: dialogue.slice(-8).map(m => ({ role: m.role, text: m.text })),
         aiMessage: latestAssistant.text
       });
-      // 显式为 eng 和 idx 声明类型 (string, number)，解决 CI 隐式 any 校验错误
       const items: SuggestionItem[] = await Promise.all(
         result.suggestions.map(async (eng: string, idx: number) => {
           const chn = await translateToChinese(eng);
@@ -387,7 +385,6 @@ export default function PracticeScreen() {
               )}
             </View>
             
-            {/* 1. 回复提示 Carousel (横向吸附滑动, 去掉翻译按钮, 上英下中) */}
             {showSuggestions && (
               <View style={{ marginTop: 12 }}>
                 <SuggestionCarousel
@@ -402,7 +399,8 @@ export default function PracticeScreen() {
 
             <View style={styles.inputRow}>
               <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
-              <Pressable onPress={sendAiRecording} style={[styles.send, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止录音" : "开始录音"}>
+              {/* 👈 这里修复了无障碍属性：支持测试所期待的 "开始 AI 录音" 匹配 */}
+              <Pressable onPress={sendAiRecording} style={[styles.send, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
                 <Text style={styles.primaryText}>{aiRecording ? "■ 停止" : "🎙 录音"}</Text>
               </Pressable>
               <Pressable onPress={() => handleSendReply()} style={styles.send} accessibilityLabel="发送 AI 对话回复">
@@ -410,7 +408,6 @@ export default function PracticeScreen() {
               </Pressable>
             </View>
 
-            {/* 2. 控制栏：回复提示开关 & 纠错/翻译按钮 */}
             <ChatControlBar
               userInputText={input}
               onSend={(finalText) => handleSendReply(finalText)}
@@ -443,7 +440,6 @@ export default function PracticeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       
-      {/* 3. 查词弹窗 Modal */}
       <WordLookupModal
         visible={isWordLookupVisible}
         word={lookupTargetWord}
