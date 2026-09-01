@@ -37,14 +37,24 @@ jobs:
 
       - name: Generate Native Android Code (Expo Prebuild)
         env:
+<<<<<<< HEAD
           EXPO_PUBLIC_API_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
           EXPO_PUBLIC_BACKEND_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
+=======
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL || 'https://your-backend-api.com' }}
+          EXPO_PUBLIC_BACKEND_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_URL || 'https://your-backend-api.com' }}
+>>>>>>> 48900c2 (fix: 修复 JS Bundle 构建报错，添加组件导出与环境变量注入)
         run: npx expo prebuild --platform android --clean
 
       - name: Build APK with Gradle
         env:
+<<<<<<< HEAD
           EXPO_PUBLIC_API_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
           EXPO_PUBLIC_BACKEND_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
+=======
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL || 'https://your-backend-api.com' }}
+          EXPO_PUBLIC_BACKEND_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_URL || 'https://your-backend-api.com' }}
+>>>>>>> 48900c2 (fix: 修复 JS Bundle 构建报错，添加组件导出与环境变量注入)
           NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           cd android
