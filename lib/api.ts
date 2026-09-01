@@ -28,9 +28,13 @@ export interface SuggestionsResponse {
 }
 
 export interface PreflightResult {
-  correctedText?: string;
-  suggestion?: string;
+  isEnglish?: boolean;
+  hasError?: boolean;
   hasErrors?: boolean;
+  originalText?: string;
+  correctedText?: string;
+  translatedText?: string;
+  suggestion?: string;
   explanation?: string;
 }
 
@@ -103,8 +107,17 @@ export async function processPreflightCheck(
   text: string
 ): Promise<PreflightResult> {
   const baseUrl = getApiBaseUrl();
+  const fallbackResult: PreflightResult = {
+    isEnglish: true,
+    hasError: false,
+    hasErrors: false,
+    originalText: text,
+    correctedText: text,
+    translatedText: text,
+  };
+
   if (!baseUrl) {
-    return { correctedText: text, hasErrors: false };
+    return fallbackResult;
   }
 
   try {
@@ -117,7 +130,7 @@ export async function processPreflightCheck(
     if (!res.ok) throw new Error('预检请求失败');
     return await res.json();
   } catch {
-    return { correctedText: text, hasErrors: false };
+    return fallbackResult;
   }
 }
 
