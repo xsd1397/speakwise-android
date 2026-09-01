@@ -5,12 +5,12 @@ import * as Speech from "expo-speech";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { ScreenContainer } from "@/components/ScreenContainer";
-import { evaluateRecording, getApiBaseUrl, replyToDialogue, getReplySuggestions, transcribeRecording, translateToChinese, translateToEnglish, type DialogueMessage, type EvaluationResult } from "@/lib/api";
-import { getLevelLabel, getPracticeDialogue, LEVELS, SCENES, type LevelKey, type SceneKey, type Speaker } from "@/lib/data";
-import { getSpeechRate, selectVoiceForSpeaker } from "@/lib/voice";
-import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "@/lib/word";
-import { useWordbook } from "@/lib/wordbook";
+import { ScreenContainer } from '../../components/ScreenContainer';
+import { evaluateRecording, getApiBaseUrl, replyToDialogue, getReplySuggestions, transcribeRecording, translateToChinese, translateToEnglish, type DialogueMessage, type EvaluationResult } from "../../lib/api";
+import { getLevelLabel, getPracticeDialogue, LEVELS, SCENES, type LevelKey, type SceneKey, type Speaker } from "../../lib/data";
+import { getSpeechRate, selectVoiceForSpeaker } from "../../lib/voice";
+import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "../../lib/word";
+import { useWordbook } from "../../lib/wordbook";
 
 const ModalComponent = Modal ?? View;
 const COLORS = { 
@@ -256,9 +256,9 @@ export default function PracticeScreen() {
         history: dialogue.slice(-8).map(m => ({ role: m.role, text: m.text })),
         aiMessage: latestAssistant.text
       });
-      // 动态将建议转为 SuggestionItem 轮播卡片格式
+      // 显式为 eng 和 idx 声明类型 (string, number)，解决 CI 隐式 any 校验错误
       const items: SuggestionItem[] = await Promise.all(
-        result.suggestions.map(async (eng, idx) => {
+        result.suggestions.map(async (eng: string, idx: number) => {
           const chn = await translateToChinese(eng);
           return { id: `s_${idx}_${Date.now()}`, english: eng, chinese: chn };
         })
