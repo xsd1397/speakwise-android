@@ -1,12 +1,19 @@
 ﻿name: Build Android APK (Bypass EAS)
 
 on:
+<<<<<<< HEAD
   workflow_dispatch:
     inputs:
       backend_url:
         description: 'Public SpeakWise API origin'
         required: true
         default: 'https://speakwise-wsicpu2u.manus.space'
+=======
+  push:
+    branches:
+      - feature/next-improvements
+  workflow_dispatch:
+>>>>>>> 348261e (ci: 增加 GitHub Actions 编译生成 APK 脚本)
 
 jobs:
   build-apk:
@@ -19,7 +26,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+<<<<<<< HEAD
           node-version: 20
+=======
+          node-version: 18
+>>>>>>> 348261e (ci: 增加 GitHub Actions 编译生成 APK 脚本)
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
@@ -32,11 +43,18 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+<<<<<<< HEAD
+=======
+      - name: Setup Android SDK
+        uses: actions/setup-android@v3
+
+>>>>>>> 348261e (ci: 增加 GitHub Actions 编译生成 APK 脚本)
       - name: Install Dependencies
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Native Android Code (Expo Prebuild)
         env:
+<<<<<<< HEAD
           EXPO_PUBLIC_API_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
           EXPO_PUBLIC_BACKEND_URL: ${{ github.event.inputs.backend_url || 'https://speakwise-wsicpu2u.manus.space' }}
         run: npx expo prebuild --platform android --clean
@@ -50,6 +68,17 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace --no-daemon
+=======
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          EXPO_PUBLIC_BACKEND_URL: ${{ secrets.EXPO_PUBLIC_BACKEND_URL }}
+        run: npx expo prebuild --platform android
+
+      - name: Build APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+>>>>>>> 348261e (ci: 增加 GitHub Actions 编译生成 APK 脚本)
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
