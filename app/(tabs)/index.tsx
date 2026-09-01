@@ -1,3 +1,6 @@
+import { SuggestionCarousel, SuggestionItem } from '../../components/SuggestionCarousel';
+import { ChatControlBar } from '../../components/ChatControlBar';
+import { WordLookupModal } from '../../components/WordLookupModal';
 import * as Speech from "expo-speech";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -34,7 +37,13 @@ function WordSentence({ text, onWord }: { text: string; onWord: (word: string) =
   return (
     <Text style={styles.sentence}>
       {text.split(/(\s+)/).map((part, i) => 
-        /\s+/.test(part) ? part : <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>{part}</Text>
+        /\s+/.test(part) ? (
+          part
+        ) : (
+          <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>
+            {part}
+          </Text>
+        )
       )}
     </Text>
   ); 
@@ -66,16 +75,18 @@ export default function PracticeScreen() {
   const [level, setLevel] = useState<LevelKey>("beginner");
   const [scene, setScene] = useState<SceneKey>("greetings");
   const [voices, setVoices] = useState<Speech.Voice[]>([]);
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [selectedDefinition, setSelectedDefinition] = useState<WordDefinition | null>(null);
-  const [selectedExample, setSelectedExample] = useState("");
+
+  // 单词查询与弹窗控制状态
+  const [lookupTargetWord, setLookupTargetWord] = useState<string>("");
+  const [isWordLookupVisible, setIsWordLookupVisible] = useState<boolean>(false);
+
   const { words: savedWords, toggleWord, hasWord } = useWordbook();
   const [translated, setTranslated] = useState<Record<string, boolean>>({});
   const [recordingLine, setRecordingLine] = useState<string | null>(null);
   const [recordingMessage, setRecordingMessage] = useState("点击句子右侧“录音评分”，完成后将在当前句下显示 6 秒评分详情");
   const [aiRecording, setAiRecording] = useState(false);
   const [aiRecordingUri, setAiRecordingUri] = useState<string | null>(null);
-  const [aiRecordingMessage, setAiRecordingMessage] = useState("可输入中文，发送前会自动转换为自然英文表达");
+  const [aiRecordingMessage, setAiRecordingMessage] = useState("可输入英文或录音，点击【纠错】获取分析");
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [lineEvaluation, setLineEvaluation] = useState<{ lineId: string; result: EvaluationResult } | null>(null);
@@ -92,11 +103,26 @@ export default function PracticeScreen() {
     ? Math.round(stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length) 
     : null;
 
-  const [replySuggestions, setReplySuggestions] = useState<string[]>([]);
+  // 回复提示列表与控制
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsList, setSuggestionsList] = useState<SuggestionItem[]>([
+    {
+      id: "s1",
+      english: "I am doing great, thank you! How about you?",
+      chinese: "我过得挺好的，谢谢！你呢？"
+    },
+    {
+      id: "s2",
+      english: "Could you please repeat that more slowly?",
+      chinese: "你能说得慢一点并重复一次吗？"
+    },
+    {
+      id: "s3",
+      english: "That sounds like a wonderful idea!",
+      chinese: "听起来真是个不错的主意！"
+    }
+  ]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [englishDraft, setEnglishDraft] = useState<{ source: string; translation: string } | null>(null);
-  const [suggestionTranslation, setSuggestionTranslation] = useState<Record<string, string>>({});
-  const [translatingSuggestion, setTranslatingSuggestion] = useState<string | null>(null);
 
   const showLineEvaluation = (lineId: string, result: EvaluationResult) => { 
     if (evaluationTimer.current) clearTimeout(evaluationTimer.current); 
@@ -110,31 +136,13 @@ export default function PracticeScreen() {
   useEffect(() => { 
     setDialogue([{ role: "assistant", text: target.text, translation: target.translation }]); 
     setTranslated({}); 
-    setAiRecordingMessage("可输入中文，发送前会自动转换为自然英文表达"); 
+    setAiRecordingMessage("可输入英文或录音，点击【纠错】获取分析"); 
   }, [scene, level, target.text]);
 
   useEffect(() => { 
     Speech.getAvailableVoicesAsync().then(setVoices).catch(() => setVoices([])); 
     return () => { Speech.stop?.(); }; 
   }, []);
-
-  useEffect(() => { 
-    if (!selectedWord) { setSelectedDefinition(null); setSelectedExample(""); return; } 
-    let active = true;
-    const fetchDefinition = async () => {
-      const localDef = getWordDefinition(selectedWord);
-      setSelectedDefinition(localDef);
-      if (!localDef || !localDef.meaning) {
-        const translated = await translateToChinese(selectedWord);
-        if (active) {
-          setSelectedDefinition(prev => prev ? { ...prev, meaning: translated } : { meaning: translated, phonetic: "N/A" });
-        }
-      }
-    };
-    fetchDefinition();
-    const timer = setTimeout(() => setSelectedWord(null), 8000); 
-    return () => { active = false; clearTimeout(timer); }; 
-  }, [selectedWord]);
 
   const speak = (text: string, speaker: Speaker = "Alex") => { 
     Speech.stop(); 
@@ -146,6 +154,14 @@ export default function PracticeScreen() {
     }; 
     if (selection.voice?.identifier) options.voice = selection.voice.identifier; 
     Speech.speak(text, options); 
+  };
+
+  const handleWordClick = (word: string) => {
+    const clean = word.replace(/[^\w]/g, '').trim();
+    if (clean) {
+      setLookupTargetWord(clean);
+      setIsWordLookupVisible(true);
+    }
   };
 
   const toggleRecording = async (line = target) => {
@@ -186,11 +202,10 @@ export default function PracticeScreen() {
         setAiRecording(false); 
         if (!uri) throw new Error("没有找到录音文件，请重新录音。"); 
         setAiRecordingUri(uri); 
-        setAiRecordingMessage("正在识别中文或英文语音……"); 
+        setAiRecordingMessage("正在识别语音内容……"); 
         const result = await transcribeRecording(uri, "audio/mp4", "auto"); 
-        const translatedText = /[\u3400-\u9fff]/.test(result.text) ? await translateToEnglish(result.text) : result.text; 
-        setInput(translatedText); 
-        setAiRecordingMessage(/[\u3400-\u9fff]/.test(result.text) ? "中文已转换为英文，请检查后点击发送。" : "已转换到回复框，请检查英文表达后点击发送。"); 
+        setInput(result.text); 
+        setAiRecordingMessage("录音识别完成，请点击【纠错】获取分析或发送。"); 
       } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "语音识别失败，请改用文字输入重试。"); } 
       return; 
     } 
@@ -201,31 +216,16 @@ export default function PracticeScreen() {
       await aiRecorder.prepareToRecordAsync(); 
       aiRecorder.record(); 
       setAiRecording(true); 
-      setAiRecordingMessage("正在录音，再次点击停止并转换到回复框"); 
+      setAiRecordingMessage("正在录音，再次点击停止并转写至输入框"); 
     } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "无法开始录音，请检查麦克风权限。"); } 
   };
 
-  const handleSendReply = async () => {
-    const rawMessage = input.trim(); 
+  const handleSendReply = async (textToSend?: string) => {
+    const rawMessage = (textToSend ?? input).trim(); 
     if (!rawMessage || replyLoading || translationLoading) return; 
     setReplyError(null); 
 
-    if (/[\u3400-\u9fff]/.test(rawMessage) && !englishDraft) {
-      setTranslationLoading(true);
-      try {
-        const translation = await translateToEnglish(rawMessage);
-        setEnglishDraft({ source: rawMessage, translation });
-        setInput(translation);
-      } catch (e) {
-        setReplyError("翻译失败，请稍后重试。");
-      } finally {
-        setTranslationLoading(false);
-      }
-      return;
-    }
-
     setInput("");
-    setEnglishDraft(null);
     setReplyLoading(true);
     try {
       const userMessage = rawMessage;
@@ -256,21 +256,19 @@ export default function PracticeScreen() {
         history: dialogue.slice(-8).map(m => ({ role: m.role, text: m.text })),
         aiMessage: latestAssistant.text
       });
-      setReplySuggestions(result.suggestions);
+      // 动态将建议转为 SuggestionItem 轮播卡片格式
+      const items: SuggestionItem[] = await Promise.all(
+        result.suggestions.map(async (eng, idx) => {
+          const chn = await translateToChinese(eng);
+          return { id: `s_${idx}_${Date.now()}`, english: eng, chinese: chn };
+        })
+      );
+      setSuggestionsList(items);
+      setShowSuggestions(true);
     } catch {
       setReplyError("获取建议失败。");
     } finally {
       setSuggestionsLoading(false);
-    }
-  };
-
-  const translateSuggestion = async (text: string) => {
-    setTranslatingSuggestion(text);
-    try {
-      const res = await translateToChinese(text);
-      setSuggestionTranslation(prev => ({ ...prev, [text]: res }));
-    } finally {
-      setTranslatingSuggestion(null);
     }
   };
 
@@ -280,7 +278,7 @@ export default function PracticeScreen() {
         <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.nav}>
             <View>
-              <Text style={styles.brand}>S　英语口语</Text>
+              <Text style={styles.brand}>S 英语口语</Text>
               <Text style={styles.kicker}>SpeakWise · 练习助手</Text>
             </View>
             <View style={styles.statsHeader}>
@@ -290,7 +288,7 @@ export default function PracticeScreen() {
             </View>
           </View>
 
-          <Text style={styles.breadcrumb}>英语口语　/　{SCENES.find((s) => s.key === scene)?.title}</Text>
+          <Text style={styles.breadcrumb}>英语口语 / {SCENES.find((s) => s.key === scene)?.title}</Text>
 
           <View style={styles.selector}>
             <Text style={styles.sectionLabel}>难度级别</Text>
@@ -319,7 +317,7 @@ export default function PracticeScreen() {
 
           <View style={styles.target}>
             <Text style={styles.cardLabel}>本课目标句</Text>
-            <WordSentence text={target.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(target.text); speak(word, target.speaker); }} />
+            <WordSentence text={target.text} onWord={(w) => { handleWordClick(w); speak(w, target.speaker); }} />
             <Text style={styles.translation}>{target.translation}</Text>
             <Pressable onPress={() => speak(target.text, target.speaker)} style={styles.primary}>
               <Text style={styles.primaryText}>▶ 播放示范</Text>
@@ -340,7 +338,7 @@ export default function PracticeScreen() {
                   <Text style={styles.speaker}>{line.speaker}</Text>
                   <Text style={styles.role}>{line.speaker === "Alex" ? "练习句" : "对话伙伴"}</Text>
                 </View>
-                <WordSentence text={line.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(line.text); speak(word, line.speaker); }} />
+                <WordSentence text={line.text} onWord={(w) => { handleWordClick(w); speak(w, line.speaker); }} />
                 {translated[line.id] && <Text style={styles.translation}>{line.translation}</Text>}
                 <View style={styles.actions}>
                   <Pressable onPress={() => speak(line.text, line.speaker)} style={styles.action}>
@@ -376,7 +374,7 @@ export default function PracticeScreen() {
                 dialogue.map((m, i) => (
                   <View key={i} style={[styles.bubble, m.role === "user" ? styles.user : styles.assistant]}>
                     <Text style={styles.role}>{m.role === "user" ? "你" : "AI 教练"}</Text>
-                    <WordSentence text={m.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(m.text); speak(word, "Alex"); }} />
+                    <WordSentence text={m.text} onWord={(w) => { handleWordClick(w); speak(w, "Alex"); }} />
                     {m.role === "user" && m.correction && <CorrectionCard original={m.text} corrected={m.correction} />}
                     {m.role === "assistant" && <Text style={styles.translation}>{m.translation ?? "暂无中文翻译"}</Text>}
                     <View style={styles.actions}>
@@ -389,52 +387,41 @@ export default function PracticeScreen() {
               )}
             </View>
             
-            {replySuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                <Text style={styles.suggestionsTitle}>💡 AI 回复建议</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsRow}>
-                  {replySuggestions.map((s, i) => (
-                    <Pressable key={i} style={styles.suggestionChip} onPress={() => { setInput(s); setEnglishDraft(null); }}>
-                      <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
-                      <View style={styles.suggestionActions}>
-                        <Pressable onPress={() => speak(s)}><Text style={styles.suggestionSmallText}>🔊</Text></Pressable>
-                        <Pressable onPress={() => translateSuggestion(s)}><Text style={styles.suggestionSmallText}>{translatingSuggestion === s ? "..." : (suggestionTranslation[s] ? "✕" : "译")}</Text></Pressable>
-                      </View>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+            {/* 1. 回复提示 Carousel (横向吸附滑动, 去掉翻译按钮, 上英下中) */}
+            {showSuggestions && (
+              <View style={{ marginTop: 12 }}>
+                <SuggestionCarousel
+                  suggestions={suggestionsList}
+                  onSelectSuggestion={(selectedText) => {
+                    setInput(selectedText);
+                    setShowSuggestions(false);
+                  }}
+                />
               </View>
             )}
 
             <View style={styles.inputRow}>
-              <TextInput value={input} onChangeText={setInput} onSubmitEditing={handleSendReply} placeholder="输入英文回复" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
-              <Pressable onPress={handleSendReply} style={styles.send} accessibilityLabel="发送 AI 对话回复">
+              <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
+              <Pressable onPress={sendAiRecording} style={[styles.send, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止录音" : "开始录音"}>
+                <Text style={styles.primaryText}>{aiRecording ? "■ 停止" : "🎙 录音"}</Text>
+              </Pressable>
+              <Pressable onPress={() => handleSendReply()} style={styles.send} accessibilityLabel="发送 AI 对话回复">
                 {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>发送</Text>}
               </Pressable>
             </View>
-            <View style={styles.actions}>
-              <Pressable onPress={sendAiRecording} style={[styles.action, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
-                <Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text>
-              </Pressable>
-              <Pressable onPress={requestSuggestions} style={styles.action} disabled={suggestionsLoading}>
-                <Text style={// @ts-ignore
-                  styles.actionText}>{suggestionsLoading ? "生成中..." : "回复提示"}</Text>
-              </Pressable>
-            </View>
 
-            {englishDraft && (
-              <View style={styles.draftCard}>
-                <View style={styles.draftHeader}>
-                  <Text style={styles.draftTitle}>英文回答建议</Text>
-                  <Pressable onPress={() => setEnglishDraft(null)}><Text style={styles.draftClose}>✕</Text></Pressable>
-                </View>
-                <Text style={styles.draftSource}>中文：{englishDraft.source}</Text>
-                <Text style={styles.draftTranslation}>自然英文：{englishDraft.translation}</Text>
-                <Pressable style={styles.draftButton} onPress={() => { setInput(englishDraft.translation); setEnglishDraft(null); }}>
-                  <Text style={styles.draftButtonText}>使用这句英文</Text>
-                </Pressable>
-              </View>
-            )}
+            {/* 2. 控制栏：回复提示开关 & 纠错/翻译按钮 */}
+            <ChatControlBar
+              userInputText={input}
+              onSend={(finalText) => handleSendReply(finalText)}
+              onToggleSuggestions={() => {
+                if (!showSuggestions && suggestionsList.length === 0) {
+                  requestSuggestions();
+                } else {
+                  setShowSuggestions((prev) => !prev);
+                }
+              }}
+            />
 
             <Text style={styles.helper}>{aiRecordingMessage}</Text>
             {replyError && <Text style={styles.error}>{replyError}</Text>}
@@ -456,30 +443,13 @@ export default function PracticeScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
       
-      {selectedWord && (
-        <View style={styles.floatingBubble}>
-          <View style={styles.bubbleContent}>
-            <View style={styles.bubbleHeader}>
-              <Text style={styles.bubbleWord}>{selectedWord}</Text>
-              <Text style={styles.bubblePhonetic}>{selectedDefinition?.phonetic ?? "..."}</Text>
-              <Pressable onPress={() => speak(selectedWord)} style={styles.bubbleAudioBtn}>
-                <Text style={{color: '#fff'}}>🔊</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.bubbleMeaning}>{selectedDefinition?.meaning ?? "查询中..."}</Text>
-            <View style={styles.bubbleFooter}>
-              <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.bubbleSaveBtn}>
-                <Text style={styles.bubbleSaveText}>{hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
-              </Pressable>
-              <Pressable onPress={() => setSelectedWord(null)} style={styles.bubbleCloseBtn}>
-                <Text style={styles.bubbleCloseText}>✕</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
+      {/* 3. 查词弹窗 Modal */}
+      <WordLookupModal
+        visible={isWordLookupVisible}
+        word={lookupTargetWord}
+        onClose={() => setIsWordLookupVisible(false)}
+      />
 
-      <ModalComponent visible={false} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)} />
     </ScreenContainer>
   );
 }
@@ -541,12 +511,6 @@ const styles = StyleSheet.create({
   score: { backgroundColor: COLORS.statBg, padding: 14, borderRadius: 14 }, 
   scoreValue: { color: "#73E2A8", fontSize: 38, fontWeight: "900" }, 
   backTop: { alignSelf: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 }, 
-  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, 
-  wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, 
-  wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, 
-  phonetic: { color: "#8DB0FF", fontSize: 18 }, 
-  wordMeaning: { color: COLORS.text, fontSize: 16 }, 
-  modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 },
   correctionCard: { backgroundColor: COLORS.correctionBg, borderRadius: 12, borderWidth: 1, borderColor: COLORS.correctionBorder, marginTop: 10, overflow: "hidden" },
   correctionHeader: { backgroundColor: COLORS.correctionBorder, padding: 6, paddingHorizontal: 10 },
   correctionTitle: { color: "#fff", fontSize: 12, fontWeight: "900" },
@@ -554,34 +518,5 @@ const styles = StyleSheet.create({
   correctionLabel: { color: COLORS.muted, fontSize: 11 },
   correctionOriginal: { color: "#FFB15C", fontSize: 13, fontStyle: "italic" },
   correctionCorrected: { color: COLORS.success, fontSize: 14, fontWeight: "700" },
-  correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 },
-  suggestionsContainer: { marginTop: 15, gap: 8 },
-  suggestionsTitle: { color: COLORS.orange, fontSize: 12, fontWeight: "800" },
-  suggestionsRow: { flexDirection: "row", gap: 8 },
-  suggestionChip: { backgroundColor: COLORS.panel2, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "90%" },
-  suggestionText: { color: COLORS.text, fontSize: 11, fontWeight: "600", flex: 1 },
-  suggestionActions: { flexDirection: "row", gap: 4, marginLeft: 6 },
-  suggestionSmallText: { color: COLORS.muted, fontSize: 10 },
-  clearSuggestions: { alignSelf: "flex-end", marginTop: 4 },
-  clearText: { color: COLORS.muted, fontSize: 10, textDecorationLine: "underline" },
-  draftCard: { backgroundColor: COLORS.blueSoft, borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: COLORS.blue },
-  draftHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  draftTitle: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  draftClose: { color: "#fff", fontSize: 14 },
-  draftSource: { color: "#AABBEF", fontSize: 11, marginBottom: 4 },
-  draftTranslation: { color: "#fff", fontSize: 13, fontWeight: "700", marginBottom: 10 },
-  draftButton: { backgroundColor: "#fff", borderRadius: 6, padding: 6, alignItems: "center" },
-  draftButtonText: { color: COLORS.blueSoft, fontSize: 11, fontWeight: "800" },
-  floatingBubble: { position: "absolute", bottom: 100, alignSelf: "center", zIndex: 100, width: "80%" },
-  bubbleContent: { backgroundColor: COLORS.panel2, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 10 },
-  bubbleHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
-  bubbleWord: { color: COLORS.text, fontSize: 16, fontWeight: "800", textTransform: "capitalize" },
-  bubblePhonetic: { color: "#8DB0FF", fontSize: 13, fontFamily: "monospace" },
-  bubbleAudioBtn: { backgroundColor: COLORS.blue, width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  bubbleMeaning: { color: COLORS.text, fontSize: 14, lineHeight: 20, marginBottom: 10 },
-  bubbleFooter: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 8 },
-  bubbleSaveBtn: { backgroundColor: COLORS.blueSoft, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
-  bubbleSaveText: { color: "#fff", fontSize: 11, fontWeight: "700" },
-  bubbleCloseBtn: { padding: 4 },
-  bubbleCloseText: { color: COLORS.muted, fontSize: 14 }
+  correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 }
 });

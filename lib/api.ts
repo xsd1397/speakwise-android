@@ -1,70 +1,65 @@
-import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
-
-export type DialogueRole = "user" | "assistant";
-export type DialogueMessage = { role: DialogueRole; text: string; translation?: string; correction?: string };
-export type EvaluationResult = { transcript: string; duration: number; overallScore: number; pronunciationScore: number; fluencyScore: number; accuracyScore: number; transcriptAccuracy: number; wordErrorRate: number; summary: string; issues: string[]; suggestions: string[] };
-
-const configuredBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl ?? process.env.EXPO_PUBLIC_API_BASE_URL;
-export function getApiBaseUrl() { return configuredBaseUrl?.replace(/\/$/, "") ?? ""; }
-
-async function callMutation<T>(procedure: string, input: unknown): Promise<T> { 
-  const baseUrl = getApiBaseUrl(); 
-  if (!baseUrl) throw new Error("尚未配置后端地址，请在 app.config.ts 或 EXPO_PUBLIC_API_BASE_URL 中设置。"); 
-  const response = await fetch(`${baseUrl}/api/trpc/${procedure}`, { 
-    method: "POST", 
-    headers: { "Content-Type": "application/json" }, 
-    body: JSON.stringify({ json: input }) 
-  }); 
-  const payload = await response.json() as { result?: { data?: { json?: T } }; error?: { json?: { message?: string } }; }; 
-  if (!response.ok) throw new Error(payload.error?.json?.message ?? `请求失败: ${response.status}`); 
-  const result = payload.result?.data?.json; 
-  if (result === undefined) throw new Error("服务器返回了无法识别的数据。"); 
-  return result; 
+export interface PreflightResult {
+  isEnglish: boolean;
+  hasError?: boolean;
+  originalText: string;
+  correctedText?: string;
+  explanation?: string;
+  translatedText?: string; // 如果输入为中文，则返回翻译后的英文
 }
 
-// 1. 对话回复 - 将 scene 类型改为 string 以兼容所有场景
-export async function replyToDialogue(input: { level: string; scene: string; history: DialogueMessage[]; userMessage: string }) { 
-  return callMutation<{ reply: string; translation?: string; correction?: string; correctedEnglish?: string }>("dialogue.reply", input); 
-}
+/**
+ * 纠错/翻译预检：自动判断中英文并处理
+ */
+export async function processPreflightCheck(inputText: string): Promise<PreflightResult> {
+  // 正则检测是否主要包含英文字母
+  const englishCharCount = (inputText.match(/[a-zA-Z]/g) || []).length;
+  const isEnglish = englishCharCount / inputText.length > 0.4;
 
-// 2. 获取回复建议 - 将 scene 类型改为 string 以兼容所有场景
-export async function getReplySuggestions(input: { level: string; scene: string; history: DialogueMessage[]; aiMessage: string }) { 
-  return callMutation<{ suggestions: string[] }>("dialogue.suggestions", input); 
-}
+  if (isEnglish) {
+    const prompt = `You are an AI English tutor. Check the following text for spelling, grammar, or phrasing errors.
+Text: "${inputText}"
+Return strictly JSON format:
+{
+  "hasError": boolean,
+  "correctedText": "corrected English sentence",
+  "explanation": "Brief explanation in Chinese if there are errors, otherwise empty"
+}`;
 
-// 3. 中文翻译
-export async function translateToChinese(text: string) { 
-  const value = text.trim(); if (!value) return value; 
-  try { 
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(value)}&langpair=en|zh-CN`); 
-    const payload = await response.json() as { responseData?: { translatedText?: string } }; 
-    return payload.responseData?.translatedText?.trim() || "中文翻译暂时不可用"; 
-  } catch { return "中文翻译暂时不可用"; } 
-}
+    try {
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      const data = await response.json();
+      const parsed = JSON.parse(data.text);
 
-// 4. 英文翻译
-export async function translateToEnglish(text: string) { 
-  const value = text.trim(); if (!value) return value; 
-  try { 
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(value)}&langpair=zh-CN|en`); 
-    const payload = await response.json() as { responseData?: { translatedText?: string } }; 
-    const translated = payload.responseData?.translatedText?.trim(); 
-    return translated || value; 
-  } catch { return value; } 
-}
-
-async function readAudio(uri: string) { 
-  if (!uri) throw new Error("没有找到真实音频文件，请重新录制。"); 
-  const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); 
-  if (!audioBase64) throw new Error("音频文件为空，请重新录制。"); 
-  return audioBase64; 
-}
-
-export async function evaluateRecording(uri: string, targetSentence: string, mimeType = "audio/mp4") { 
-  return callMutation<EvaluationResult>("voice.evaluate", { audioBase64: await readAudio(uri), mimeType, targetSentence, language: "en" }); 
-}
-
-export async function transcribeRecording(uri: string, mimeType = "audio/mp4", language: "auto" | "en" | "zh" = "auto") { 
-  return callMutation<{ text: string; duration?: number }>("voice.transcribe", { audioBase64: await readAudio(uri), mimeType, language }); 
+      return {
+        isEnglish: true,
+        hasError: parsed.hasError,
+        originalText: inputText,
+        correctedText: parsed.correctedText,
+        explanation: parsed.explanation,
+      };
+    } catch {
+      return { isEnglish: true, hasError: false, originalText: inputText, correctedText: inputText };
+    }
+  } else {
+    // 中文输入 -> 执行原有的翻译逻辑
+    try {
+      const response = await fetch('/api/ai/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: inputText, targetLang: 'en' }),
+      });
+      const data = await response.json();
+      return {
+        isEnglish: false,
+        originalText: inputText,
+        translatedText: data.translatedText,
+      };
+    } catch {
+      return { isEnglish: false, originalText: inputText, translatedText: inputText };
+    }
+  }
 }
