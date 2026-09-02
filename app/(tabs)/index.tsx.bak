@@ -1,17 +1,15 @@
-import { SuggestionCarousel, SuggestionItem } from '../../components/SuggestionCarousel';
-import { ChatControlBar } from '../../components/ChatControlBar';
-import { WordLookupModal } from '../../components/WordLookupModal';
 import * as Speech from "expo-speech";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { ScreenContainer } from '../../components/ScreenContainer';
-import { evaluateRecording, getApiBaseUrl, replyToDialogue, getReplySuggestions, transcribeRecording, translateToChinese, translateToEnglish, type DialogueMessage, type EvaluationResult } from "../../lib/api";
-import { getLevelLabel, getPracticeDialogue, LEVELS, SCENES, type LevelKey, type SceneKey, type Speaker } from "../../lib/data";
-import { getSpeechRate, selectVoiceForSpeaker } from "../../lib/voice";
-import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "../../lib/word";
-import { useWordbook } from "../../lib/wordbook";
+import { ScreenContainer } from "@/components/ScreenContainer";
+import { evaluateRecording, getApiBaseUrl, replyToDialogue, transcribeRecording, translateToChinese, translateToEnglish, type DialogueMessage, type EvaluationResult } from "@/lib/api";
+import { getLevelLabel, getPracticeDialogue, LEVELS, SCENES, type LevelKey, type SceneKey, type Speaker } from "@/lib/data";
+import { getSpeechRate, selectVoiceForSpeaker } from "@/lib/voice";
+import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "@/lib/word";
+import { useWordbook } from "@/lib/wordbook";
 
+const ModalComponent = Modal ?? View;
 const COLORS = { 
   bg: "#0B0C0F", 
   panel: "#111317", 
@@ -24,8 +22,7 @@ const COLORS = {
   orange: "#FFB15C", 
   correctionBg: "#1A233A", 
   correctionBorder: "#4A6BEB", 
-  success: "#73E2A8",
-  statBg: "#182C25"
+  success: "#73E2A8" 
 };
 
 function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" { 
@@ -36,13 +33,7 @@ function WordSentence({ text, onWord }: { text: string; onWord: (word: string) =
   return (
     <Text style={styles.sentence}>
       {text.split(/(\s+)/).map((part, i) => 
-        /\s+/.test(part) ? (
-          part
-        ) : (
-          <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>
-            {part}
-          </Text>
-        )
+        /\s+/.test(part) ? part : <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>{part}</Text>
       )}
     </Text>
   ); 
@@ -65,6 +56,35 @@ function CorrectionCard({ original, corrected }: { original: string; corrected: 
   );
 }
 
+type ReplyHint = { text: string; translation: string };
+function buildReplyHints(reply: string): ReplyHint[] {
+  const source = reply.replace(/\s+/g, " ").trim();
+  const quoted = source.length > 72 ? `${source.slice(0, 69)}...` : source;
+  const lower = source.toLowerCase();
+  if (/\b(what|where|when|why|how|could|would|do you|are you|have you)\b|[?？]/i.test(source)) {
+    return [
+      { text: `To answer your question about "${quoted}", I would like to share my own experience.`, translation: `关于"${quoted}"这个问题，我想分享一下自己的经历。` },
+      { text: `That is an interesting point about "${quoted}"; could you tell me more about it?`, translation: `关于"${quoted}"这一点很有意思；你能再多告诉我一些吗？` },
+    ];
+  }
+  if (/\b(recommend|suggest|advice|should|need to|try|remember)\b/i.test(lower)) {
+    return [
+      { text: `Your suggestion about "${quoted}" makes sense, and I will try it.`, translation: `你关于"${quoted}"的建议很有道理，我会试试看。` },
+      { text: `Before I decide about "${quoted}", could you explain the main benefit?`, translation: `在决定"${quoted}"之前，你能解释一下主要好处吗？` },
+    ];
+  }
+  if (/\b(problem|issue|difficult|concern|emergency|injured|unsafe|warning)\b/i.test(lower)) {
+    return [
+      { text: `I understand the concern about "${quoted}", and I will follow your instructions.`, translation: `我理解你对"${quoted}"的担忧，会按照你的指示去做。` },
+      { text: `Regarding "${quoted}", what should I do first to stay safe?`, translation: `关于"${quoted}"，为了安全起见我首先应该做什么？` },
+    ];
+  }
+  return [
+    { text: `I agree with your point about "${quoted}", and I can give an example.`, translation: `我同意你关于"${quoted}"的观点，也可以举一个例子。` },
+    { text: `I would like to add one detail about "${quoted}" from my own experience.`, translation: `关于"${quoted}"，我想根据自己的经历再补充一个细节。` },
+  ];
+}
+
 export default function PracticeScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -74,18 +94,17 @@ export default function PracticeScreen() {
   const [level, setLevel] = useState<LevelKey>("beginner");
   const [scene, setScene] = useState<SceneKey>("greetings");
   const [voices, setVoices] = useState<Speech.Voice[]>([]);
-
-  // 单词查询与弹窗控制状态
-  const [lookupTargetWord, setLookupTargetWord] = useState<string>("");
-  const [isWordLookupVisible, setIsWordLookupVisible] = useState<boolean>(false);
-
+  const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [selectedDefinition, setSelectedDefinition] = useState<WordDefinition | null>(null);
+  const [selectedExample, setSelectedExample] = useState("");
   const { words: savedWords, toggleWord, hasWord } = useWordbook();
   const [translated, setTranslated] = useState<Record<string, boolean>>({});
   const [recordingLine, setRecordingLine] = useState<string | null>(null);
   const [recordingMessage, setRecordingMessage] = useState("点击句子右侧“录音评分”，完成后将在当前句下显示 6 秒评分详情");
   const [aiRecording, setAiRecording] = useState(false);
   const [aiRecordingUri, setAiRecordingUri] = useState<string | null>(null);
-  const [aiRecordingMessage, setAiRecordingMessage] = useState("可输入英文或录音，点击【纠错】获取分析");
+  const [aiRecordingMessage, setAiRecordingMessage] = useState("可输入中文，发送前会自动转换为自然英文表达");
+  const [showAiHints, setShowAiHints] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [lineEvaluation, setLineEvaluation] = useState<{ lineId: string; result: EvaluationResult } | null>(null);
@@ -96,32 +115,6 @@ export default function PracticeScreen() {
   const [dialogue, setDialogue] = useState<DialogueMessage[]>([]);
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
-
-  const [stats, setStats] = useState({ rounds: 0, recordings: 0, scores: [] as number[] });
-  const averageScore = stats.scores.length > 0 
-    ? Math.round(stats.scores.reduce((a, b) => a + b, 0) / stats.scores.length) 
-    : null;
-
-  // 回复提示列表与控制
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionsList, setSuggestionsList] = useState<SuggestionItem[]>([
-    {
-      id: "s1",
-      english: "I am doing great, thank you! How about you?",
-      chinese: "我过得挺好的，谢谢！你呢？"
-    },
-    {
-      id: "s2",
-      english: "Could you please repeat that more slowly?",
-      chinese: "你能说得慢一点并重复一次吗？"
-    },
-    {
-      id: "s3",
-      english: "That sounds like a wonderful idea!",
-      chinese: "听起来真是个不错的主意！"
-    }
-  ]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   const showLineEvaluation = (lineId: string, result: EvaluationResult) => { 
     if (evaluationTimer.current) clearTimeout(evaluationTimer.current); 
@@ -135,13 +128,31 @@ export default function PracticeScreen() {
   useEffect(() => { 
     setDialogue([{ role: "assistant", text: target.text, translation: target.translation }]); 
     setTranslated({}); 
-    setAiRecordingMessage("可输入英文或录音，点击【纠错】获取分析"); 
+    setAiRecordingMessage("可输入中文，发送前会自动转换为自然英文表达"); 
   }, [scene, level, target.text]);
 
   useEffect(() => { 
     Speech.getAvailableVoicesAsync().then(setVoices).catch(() => setVoices([])); 
     return () => { Speech.stop?.(); }; 
   }, []);
+
+  useEffect(() => { 
+    if (!selectedWord) { setSelectedDefinition(null); setSelectedExample(""); return; } 
+    let active = true;
+    const fetchDefinition = async () => {
+      const localDef = getWordDefinition(selectedWord);
+      setSelectedDefinition(localDef);
+      if (!localDef || !localDef.meaning) {
+        const translated = await translateToChinese(selectedWord);
+        if (active) {
+          setSelectedDefinition(prev => prev ? { ...prev, meaning: translated } : { meaning: translated, phonetic: "N/A" });
+        }
+      }
+    };
+    fetchDefinition();
+    const timer = setTimeout(() => setSelectedWord(null), 8000); 
+    return () => { active = false; clearTimeout(timer); }; 
+  }, [selectedWord]);
 
   const speak = (text: string, speaker: Speaker = "Alex") => { 
     Speech.stop(); 
@@ -153,14 +164,6 @@ export default function PracticeScreen() {
     }; 
     if (selection.voice?.identifier) options.voice = selection.voice.identifier; 
     Speech.speak(text, options); 
-  };
-
-  const handleWordClick = (word: string) => {
-    const clean = word.replace(/[^\w]/g, '').trim();
-    if (clean) {
-      setLookupTargetWord(clean);
-      setIsWordLookupVisible(true);
-    }
   };
 
   const toggleRecording = async (line = target) => {
@@ -178,7 +181,6 @@ export default function PracticeScreen() {
         setEvaluation(result); 
         showLineEvaluation(line.id, result); 
         setRecordingMessage("评分完成：点击句子下方评分详情可立即关闭"); 
-        setStats(prev => ({ ...prev, recordings: prev.recordings + 1, scores: [...prev.scores, result.overallScore] }));
       } catch (e) { setRecordingError(e instanceof Error ? e.message : "录音处理失败，请重试。"); } finally { setEvaluationLoading(false); } 
       return; 
     }
@@ -201,10 +203,11 @@ export default function PracticeScreen() {
         setAiRecording(false); 
         if (!uri) throw new Error("没有找到录音文件，请重新录音。"); 
         setAiRecordingUri(uri); 
-        setAiRecordingMessage("正在识别语音内容……"); 
+        setAiRecordingMessage("正在识别中文或英文语音……"); 
         const result = await transcribeRecording(uri, "audio/mp4", "auto"); 
-        setInput(result.text); 
-        setAiRecordingMessage("录音识别完成，请点击【纠错】获取分析或发送。"); 
+        const translatedText = /[\u3400-\u9fff]/.test(result.text) ? await translateToEnglish(result.text) : result.text; 
+        setInput(translatedText); 
+        setAiRecordingMessage(/[\u3400-\u9fff]/.test(result.text) ? "中文已转换为英文，请检查后点击发送。" : "已转换到回复框，请检查英文表达后点击发送。"); 
       } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "语音识别失败，请改用文字输入重试。"); } 
       return; 
     } 
@@ -215,24 +218,30 @@ export default function PracticeScreen() {
       await aiRecorder.prepareToRecordAsync(); 
       aiRecorder.record(); 
       setAiRecording(true); 
-      setAiRecordingMessage("正在录音，再次点击停止并转写至输入框"); 
+      setAiRecordingMessage("正在录音，再次点击停止并转换到回复框"); 
     } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "无法开始录音，请检查麦克风权限。"); } 
   };
 
-  const handleSendReply = async (textToSend?: string) => {
-    const rawMessage = (textToSend ?? input).trim(); 
+  const sendReply = async () => { 
+    const rawMessage = input.trim(); 
     if (!rawMessage || replyLoading || translationLoading) return; 
     setReplyError(null); 
-
-    setInput("");
-    setReplyLoading(true);
-    try {
-      const userMessage = rawMessage;
+    setTranslationLoading(true); 
+    try { 
+      const userMessage = /[\u3400-\u9fff]/.test(rawMessage) ? await translateToEnglish(rawMessage) : rawMessage; 
+      if (userMessage !== rawMessage) { 
+        setInput(userMessage); 
+        setAiRecordingMessage("中文已转换为英文，请确认后再次点击发送。"); 
+        setTranslationLoading(false); 
+        return; 
+      } 
+      setInput(""); 
       if (!getApiBaseUrl()) { 
-        setReplyError("尚未配置后端地址。"); 
+        setReplyError("尚未配置后端地址，已保留你的输入；配置后才能请求真实 AI 回复。"); 
         setDialogue((d) => [...d, { role: "user", text: userMessage }]); 
         return; 
       } 
+      setReplyLoading(true); 
       const response = await replyToDialogue({ level, scene, history: dialogue, userMessage }); 
       const replyTranslation = response.translation?.trim() || await translateToChinese(response.reply); 
       setDialogue((d) => [
@@ -240,35 +249,13 @@ export default function PracticeScreen() {
         { role: "user", text: userMessage, correction: response.correctedEnglish ?? response.correction }, 
         { role: "assistant", text: response.reply, translation: replyTranslation }
       ]); 
-      speak(response.reply, "Mia");
-      setStats(prev => ({ ...prev, rounds: prev.rounds + 1 }));
-    } catch (e) { setReplyError(e instanceof Error ? e.message : "AI 对话暂时不可用。"); } finally { setReplyLoading(false); } 
+      speak(response.reply, "Mia"); 
+    } catch (e) { setReplyError(e instanceof Error ? e.message : "AI 对话暂时不可用，请稍后重试。"); } finally { setTranslationLoading(false); setReplyLoading(false); } 
   };
 
-  const requestSuggestions = async () => {
-    const latestAssistant = [...dialogue].reverse().find(m => m.role === "assistant");
-    if (!latestAssistant) return;
-    setSuggestionsLoading(true);
-    try {
-      const result = await getReplySuggestions({
-        level, scene, 
-        history: dialogue.slice(-8).map(m => ({ role: m.role, text: m.text })),
-        aiMessage: latestAssistant.text
-      });
-      const items: SuggestionItem[] = await Promise.all(
-        result.suggestions.map(async (eng: string, idx: number) => {
-          const chn = await translateToChinese(eng);
-          return { id: `s_${idx}_${Date.now()}`, english: eng, chinese: chn };
-        })
-      );
-      setSuggestionsList(items);
-      setShowSuggestions(true);
-    } catch {
-      setReplyError("获取建议失败。");
-    } finally {
-      setSuggestionsLoading(false);
-    }
-  };
+  const lastAssistant = [...dialogue].reverse().find((message) => message.role === "assistant");
+  const lastReply = (lastAssistant?.text ?? target.text).trim();
+  const hintTexts = buildReplyHints(lastReply);
 
   return (
     <ScreenContainer>
@@ -276,17 +263,13 @@ export default function PracticeScreen() {
         <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.nav}>
             <View>
-              <Text style={styles.brand}>S 英语口语</Text>
+              <Text style={styles.brand}>S　英语口语</Text>
               <Text style={styles.kicker}>SpeakWise · 练习助手</Text>
             </View>
-            <View style={styles.statsHeader}>
-               <Text style={styles.statItem}>📅 {stats.rounds} 轮</Text>
-               <Text style={styles.statItem}>🎤 {stats.recordings} 次</Text>
-               <Text style={styles.statItem}>🎯 {averageScore ?? "--"}%</Text>
-            </View>
+            <Text style={styles.wordCount}>{savedWords.length}</Text>
           </View>
 
-          <Text style={styles.breadcrumb}>英语口语 / {SCENES.find((s) => s.key === scene)?.title}</Text>
+          <Text style={styles.breadcrumb}>英语口语　/　{SCENES.find((s) => s.key === scene)?.title}</Text>
 
           <View style={styles.selector}>
             <Text style={styles.sectionLabel}>难度级别</Text>
@@ -315,7 +298,7 @@ export default function PracticeScreen() {
 
           <View style={styles.target}>
             <Text style={styles.cardLabel}>本课目标句</Text>
-            <WordSentence text={target.text} onWord={(w) => { handleWordClick(w); speak(w, target.speaker); }} />
+            <WordSentence text={target.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(target.text); speak(word, target.speaker); }} />
             <Text style={styles.translation}>{target.translation}</Text>
             <Pressable onPress={() => speak(target.text, target.speaker)} style={styles.primary}>
               <Text style={styles.primaryText}>▶ 播放示范</Text>
@@ -336,7 +319,7 @@ export default function PracticeScreen() {
                   <Text style={styles.speaker}>{line.speaker}</Text>
                   <Text style={styles.role}>{line.speaker === "Alex" ? "练习句" : "对话伙伴"}</Text>
                 </View>
-                <WordSentence text={line.text} onWord={(w) => { handleWordClick(w); speak(w, line.speaker); }} />
+                <WordSentence text={line.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(line.text); speak(word, line.speaker); }} />
                 {translated[line.id] && <Text style={styles.translation}>{line.translation}</Text>}
                 <View style={styles.actions}>
                   <Pressable onPress={() => speak(line.text, line.speaker)} style={styles.action}>
@@ -372,7 +355,7 @@ export default function PracticeScreen() {
                 dialogue.map((m, i) => (
                   <View key={i} style={[styles.bubble, m.role === "user" ? styles.user : styles.assistant]}>
                     <Text style={styles.role}>{m.role === "user" ? "你" : "AI 教练"}</Text>
-                    <WordSentence text={m.text} onWord={(w) => { handleWordClick(w); speak(w, "Alex"); }} />
+                    <WordSentence text={m.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(m.text); speak(word, "Alex"); }} />
                     {m.role === "user" && m.correction && <CorrectionCard original={m.text} corrected={m.correction} />}
                     {m.role === "assistant" && <Text style={styles.translation}>{m.translation ?? "暂无中文翻译"}</Text>}
                     <View style={styles.actions}>
@@ -384,39 +367,30 @@ export default function PracticeScreen() {
                 ))
               )}
             </View>
-            
-            {showSuggestions && (
-              <View style={{ marginTop: 12 }}>
-                <SuggestionCarousel
-                  suggestions={suggestionsList}
-                  onSelectSuggestion={(selectedText) => {
-                    setInput(selectedText);
-                    setShowSuggestions(false);
-                  }}
-                  onSpeakSuggestion={(text) => speak(text, "Mia")}
-                />
-              </View>
-            )}
-
             <View style={styles.inputRow}>
-              <TextInput value={input} onChangeText={setInput} onSubmitEditing={() => handleSendReply()} placeholder="输入英文或录音" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" multiline />
-              <Pressable onPress={() => handleSendReply()} style={styles.iconSend} accessibilityLabel="发送 AI 对话回复">
-                {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendIcon}>➤</Text>}
+              <TextInput value={input} onChangeText={setInput} onSubmitEditing={sendReply} placeholder="输入英文回复" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复" />
+              <Pressable onPress={sendReply} style={styles.send} accessibilityLabel="发送 AI 对话回复">
+                {replyLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>发送</Text>}
               </Pressable>
             </View>
-            <View style={styles.aiControlsRow}>
+            <View style={styles.actions}>
               <Pressable onPress={sendAiRecording} style={[styles.action, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}>
                 <Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text>
               </Pressable>
-              <Pressable onPress={() => {
-                if (!showSuggestions && suggestionsList.length === 0) requestSuggestions();
-                else setShowSuggestions((prev) => !prev);
-              }} style={styles.action} accessibilityLabel="提示">
-                <Text style={styles.actionText}>{suggestionsLoading ? "加载中…" : showSuggestions ? "收起提示" : "提示"}</Text>
+              <Pressable onPress={() => setShowAiHints((value) => !value)} style={styles.action}>
+                <Text style={styles.actionText}>{showAiHints ? "收起回复提示" : "回复提示"}</Text>
               </Pressable>
             </View>
-
-
+            {showAiHints && (
+              <View style={styles.hints}>
+                {hintTexts.map((hint, index) => (
+                  <Pressable key={hint.text} onPress={() => { setInput(hint.text); speak(hint.text, "Mia"); }} style={styles.hint}>
+                    <Text style={styles.helper}>提示 {index + 1}：{hint.text}</Text>
+                    <Text style={styles.translation}>{hint.translation}　▶</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
             <Text style={styles.helper}>{aiRecordingMessage}</Text>
             {replyError && <Text style={styles.error}>{replyError}</Text>}
           </View>
@@ -436,13 +410,27 @@ export default function PracticeScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
-      
-      <WordLookupModal
-        visible={isWordLookupVisible}
-        word={lookupTargetWord}
-        onClose={() => setIsWordLookupVisible(false)}
-      />
 
+      <ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setSelectedWord(null)}>
+          <View style={styles.wordCard}>
+            <Text style={styles.wordTitle}>{selectedWord}</Text>
+            <Text style={styles.phonetic}>{selectedDefinition?.phonetic ?? "查询中..."}</Text>
+            <Text style={styles.wordMeaning}>{selectedDefinition?.meaning ?? "查询中..."}</Text>
+            <View style={styles.row}>
+              <Pressable onPress={() => selectedWord && speak(selectedWord)} style={styles.modalButton}>
+                <Text style={styles.actionText}>朗读单词</Text>
+              </Pressable>
+              <Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}>
+                <Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text>
+              </Pressable>
+            </View>
+            <Pressable onPress={() => setSelectedWord(null)}>
+              <Text style={styles.muted}>关闭卡片</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </ModalComponent>
     </ScreenContainer>
   );
 }
@@ -454,8 +442,6 @@ const styles = StyleSheet.create({
   brand: { color: COLORS.text, fontSize: 23, fontWeight: "900" }, 
   kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, 
   wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, 
-  statsHeader: { flexDirection: "row", gap: 12 },
-  statItem: { color: COLORS.muted, fontSize: 11, fontWeight: "700", backgroundColor: COLORS.panel, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border },
   breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, 
   selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, padding: 14, backgroundColor: COLORS.panel }, 
   sectionLabel: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, 
@@ -493,20 +479,25 @@ const styles = StyleSheet.create({
   helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 7 }, 
   thread: { gap: 8, marginTop: 14 }, 
   aiCard: { minHeight: 430 }, 
+  hints: { gap: 6, marginTop: 8 }, 
+  hint: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 9 }, 
   bubble: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border }, 
   user: { backgroundColor: "#17213A" }, 
   assistant: { backgroundColor: "#191B20" }, 
-  inputRow: { flexDirection: "row", gap: 8, marginTop: 14, alignItems: "flex-end" },
-  input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, minHeight: 96, maxHeight: 180, textAlignVertical: "top" },
-  iconSend: { backgroundColor: COLORS.blue, borderRadius: 22, width: 46, height: 46, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  sendIcon: { color: "#fff", fontSize: 24, fontWeight: "900" },
-  aiControlsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  inputRow: { flexDirection: "row", gap: 8, marginTop: 14 }, 
+  input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 }, 
   send: { backgroundColor: COLORS.blue, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" }, 
   recordStatus: { color: COLORS.muted, textAlign: "center" }, 
   error: { color: "#FF9CA9", fontSize: 12, marginTop: 8 }, 
-  score: { backgroundColor: COLORS.statBg, padding: 14, borderRadius: 14 }, 
+  score: { backgroundColor: "#182C25", padding: 14, borderRadius: 14 }, 
   scoreValue: { color: "#73E2A8", fontSize: 38, fontWeight: "900" }, 
   backTop: { alignSelf: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 }, 
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, 
+  wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, 
+  wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, 
+  phonetic: { color: "#8DB0FF", fontSize: 18 }, 
+  wordMeaning: { color: COLORS.text, fontSize: 16 }, 
+  modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 },
   correctionCard: { backgroundColor: COLORS.correctionBg, borderRadius: 12, borderWidth: 1, borderColor: COLORS.correctionBorder, marginTop: 10, overflow: "hidden" },
   correctionHeader: { backgroundColor: COLORS.correctionBorder, padding: 6, paddingHorizontal: 10 },
   correctionTitle: { color: "#fff", fontSize: 12, fontWeight: "900" },
@@ -516,3 +507,5 @@ const styles = StyleSheet.create({
   correctionCorrected: { color: COLORS.success, fontSize: 14, fontWeight: "700" },
   correctionDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 6 }
 });
+
+// === END OF FILE ===

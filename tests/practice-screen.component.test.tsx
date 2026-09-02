@@ -1,5 +1,6 @@
-import React from "react";
+// tests/practice-screen.component.test.tsx
 
+import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
 const mockScrollTo = jest.fn();
@@ -62,6 +63,7 @@ import PracticeScreen from "../app/(tabs)/index";
 import { SCENES } from "../lib/data";
 const mockApi = require("@/lib/api") as { replyToDialogue: jest.Mock };
 
+// 👈 补全 ChatControlBar 需要的 react-native 组件
 jest.mock("react-native", () => {
   const RNReact = require("react");
   const host = (name: string) => {
@@ -86,11 +88,12 @@ jest.mock("react-native", () => {
     KeyboardAvoidingView: host("KeyboardAvoidingView"),
     Platform: { OS: "android" },
     Pressable: host("Pressable"),
+    TouchableOpacity: host("TouchableOpacity"), // 👈 关键修复：补上 ChatControlBar 使用的 TouchableOpacity Component
     ScrollView,
     StyleSheet: { create: (styles: any) => styles, flatten: (style: any) => style },
     Text: host("Text"),
-  TextInput,
-  View: host("View"),
+    TextInput,
+    View: host("View"),
   };
 });
 
@@ -125,7 +128,7 @@ describe("PracticeScreen", () => {
 
     expect(screen.queryByLabelText("开始真实录音")).toBeNull();
     expect(screen.getByLabelText("开始 AI 录音")).toBeTruthy();
-    expect(screen.getByText("回复提示")).toBeTruthy();
+    expect(screen.getByLabelText("提示")).toBeTruthy();
   });
 
   it("appends a successful AI response and keeps whole-sentence speech", async () => {
