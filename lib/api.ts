@@ -98,3 +98,43 @@ export async function checkGrammarError(userInput: string): Promise<{ hasError: 
     };
   }
 }
+
+export interface DialogueHistoryMessage {
+  role: 'user' | 'assistant';
+  text: string;
+}
+
+export interface DialogueSuggestionsParams {
+  level: 'beginner' | 'intermediate' | 'advanced';
+  scene: 'greetings' | 'travel' | 'business' | 'housing' | 'medical' | 'banking' | 'shopping' | 'transit' | 'government' | 'school';
+  history: DialogueHistoryMessage[];
+  aiMessage: string;
+}
+
+export async function fetchDialogueSuggestions(params: DialogueSuggestionsParams): Promise<string[]> {
+  try {
+    const response = await fetch(\${API_BASE_URL}/api/trpc/dialogue.suggestions, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        json: params,
+      }),
+    });
+
+    const data = await response.json();
+    
+    if (data?.result?.data?.json?.suggestions) {
+      return data.result.data.json.suggestions;
+    }
+    if (Array.isArray(data?.suggestions)) {
+      return data.suggestions;
+    }
+
+    throw new Error('未返回有效的提示词数据');
+  } catch (error) {
+    console.error('获取回复提示失败:', error);
+    throw error;
+  }
+}
