@@ -1,3 +1,4 @@
+﻿const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://speakwise.app";
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -113,7 +114,7 @@ export interface DialogueSuggestionsParams {
 
 export async function fetchDialogueSuggestions(params: DialogueSuggestionsParams): Promise<string[]> {
   try {
-    const response = await fetch(\${API_BASE_URL}/api/trpc/dialogue.suggestions, {
+    const response = await fetch(`${API_BASE_URL}/api/trpc/dialogue.suggestions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -138,3 +139,6 @@ export async function fetchDialogueSuggestions(params: DialogueSuggestionsParams
     throw error;
   }
 }
+
+
+
