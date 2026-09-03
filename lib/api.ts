@@ -1,10 +1,10 @@
-﻿import { Audio } from "expo-av";
-
-export type DialogueMessage = {
+﻿export type DialogueMessage = {
   id?: string;
   role: "user" | "assistant";
   text: string;
+  translation?: string;
   timestamp?: number | Date;
+  [key: string]: any;
 };
 
 export type EvaluationResult = {
@@ -21,47 +21,30 @@ export const getApiBaseUrl = (): string => {
   return process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
 };
 
-/**
- * 通用 tRPC Mutation 请求封装 (1:1 适配后端 tRPC 格式)
- */
 async function callTrpcMutation<T>(path: string, inputData: Record<string, any>): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/trpc/${path}?batch=1`;
 
-  const bodyPayload = {
-    "0": {
-      json: inputData,
-    },
-  };
-
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(bodyPayload),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ "0": { json: inputData } }),
   });
 
   if (!response.ok) {
-    throw new Error(`tRPC Mutation ${path} failed with HTTP status ${response.status}`);
+    throw new Error(`tRPC ${path} failed: ${response.status}`);
   }
 
   const data = await response.json();
-
   if (Array.isArray(data) && data[0]?.result?.data?.json) {
     return data[0].result.data.json as T;
   }
-
   if (data?.result?.data?.json) {
     return data.result.data.json as T;
   }
-
-  throw new Error(`Invalid tRPC response structure from ${path}`);
+  return data as T;
 }
 
-/**
- * 1. 获取对话回复提示 (dialogue.suggestions - tRPC POST Mutation)
- */
 export async function fetchDialogueSuggestions(params: {
   level: string;
   scene: string;
@@ -69,7 +52,7 @@ export async function fetchDialogueSuggestions(params: {
   aiMessage: string;
 }): Promise<string[]> {
   try {
-    const res = await callTrpcMutation<{ suggestions: string[] }>("dialogue.suggestions", {
+    const res = await callTrpcMutation<any>("dialogue.suggestions", {
       level: params.level || "beginner",
       scene: params.scene || "greetings",
       history: params.history || [],
@@ -77,72 +60,63 @@ export async function fetchDialogueSuggestions(params: {
     });
     return res?.suggestions || [];
   } catch (err) {
-    console.error("[fetchDialogueSuggestions] Error:", err);
     return [];
   }
 }
 
-/**
- * 2. AI 对话回复 (dialogue.reply - tRPC POST Mutation)
- */
 export async function replyToDialogue(params: {
   level: string;
   scene: string;
   history: Array<{ role: "user" | "assistant"; text: string }>;
   userMessage: string;
-}): Promise<string> {
+}): Promise<any> {
   try {
-    const res = await callTrpcMutation<{ reply: string }>("dialogue.reply", {
+    const res = await callTrpcMutation<any>("dialogue.reply", {
       level: params.level || "beginner",
       scene: params.scene || "greetings",
       history: params.history || [],
       userMessage: params.userMessage,
     });
-    return res?.reply || "";
+    return res || { reply: "" };
   } catch (err) {
-    console.error("[replyToDialogue] Error:", err);
-    return "";
+    return { reply: "" };
   }
 }
 
-export const sendDialogueMessage = replyToDialogue;
+export async function sendDialogueMessage(params: {
+  level: string;
+  scene: string;
+  history: Array<{ role: "user" | "assistant"; text: string }>;
+  userMessage: string;
+}): Promise<any> {
+  return replyToDialogue(params);
+}
 
-/**
- * 3. 英文翻译为中文 (translation.toChinese - tRPC POST Mutation)
- */
 export async function translateToChinese(text: string): Promise<string> {
   try {
-    const res = await callTrpcMutation<{ translation: string }>("translation.toChinese", { text });
+    const res = await callTrpcMutation<any>("translation.toChinese", { text });
     return res?.translation || "";
   } catch (err) {
-    console.error("[translateToChinese] Error:", err);
     return "";
   }
 }
 
-/**
- * 4. 中文表达生成英文 (translation.toEnglish - tRPC POST Mutation)
- */
 export async function translateToEnglish(text: string): Promise<string> {
   try {
-    const res = await callTrpcMutation<{ translation: string }>("translation.toEnglish", { text });
+    const res = await callTrpcMutation<any>("translation.toEnglish", { text });
     return res?.translation || "";
   } catch (err) {
-    console.error("[translateToEnglish] Error:", err);
     return "";
   }
 }
 
-/**
- * 5. 语音转文字 (API Route)
- */
-export async function transcribeRecording(audioUri: string): Promise<string> {
+export async function transcribeRecording(audioUri: string, mimeType?: string, language?: string): Promise<{ text: string }> {
   try {
     const baseUrl = getApiBaseUrl();
     const formData = new FormData();
     formData.append("file", {
       uri: audioUri,
-      type: "audio/m4a",
+      type: mimeType || "audio/m4a",
       name: "recording.m4a",
     } as any);
 
@@ -150,37 +124,30 @@ export async function transcribeRecording(audioUri: string): Promise<string> {
       method: "POST",
       body: formData,
     });
-
-    if (!response.ok) return "";
+    if (!response.ok) return { text: "" };
     const data = await response.json();
-    return data.text || "";
+    return { text: data.text || "" };
   } catch (err) {
-    console.error("[transcribeRecording] Error:", err);
-    return "";
+    return { text: "" };
   }
 }
 
-/**
- * 6. 发音评估 (dialogue.evaluate)
- */
-export async function evaluateRecording(params: {
-  audioUri?: string;
-  userText?: string;
-  referenceText?: string;
-}): Promise<EvaluationResult> {
+// 适配 index.tsx 传入的 (audioUri, referenceText) 两个参数
+export async function evaluateRecording(audioUri?: string | { audioUri?: string; userText?: string; referenceText?: string }, referenceText?: string): Promise<EvaluationResult> {
   try {
-    const res = await callTrpcMutation<EvaluationResult>("dialogue.evaluate", params);
-    return res || {};
+    let payload: any = {};
+    if (typeof audioUri === "object" && audioUri !== null) {
+      payload = audioUri;
+    } else {
+      payload = { audioUri, referenceText };
+    }
+    return await callTrpcMutation<EvaluationResult>("dialogue.evaluate", payload);
   } catch (err) {
-    console.error("[evaluateRecording] Error:", err);
     return {};
   }
 }
 
-/**
- * 7. 语音合成 (TTS)
- */
-export async function speakText(text: string): Promise<Audio.Sound | null> {
+export async function speakText(text: string): Promise<any> {
   try {
     const baseUrl = getApiBaseUrl();
     const response = await fetch(`${baseUrl}/api/tts`, {
@@ -188,26 +155,9 @@ export async function speakText(text: string): Promise<Audio.Sound | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
-
     if (!response.ok) return null;
-
-    const blob = await response.blob();
-    const reader = new FileReader();
-
-    return new Promise((resolve) => {
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: base64data },
-          { shouldPlay: true }
-        );
-        resolve(sound);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
+    return await response.blob();
   } catch (error) {
-    console.error("[speakText] Error:", error);
     return null;
   }
 }
