@@ -1,117 +1,67 @@
-﻿const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
-import Constants from "expo-constants";
-import * as FileSystem from "expo-file-system/legacy";
+﻿import { Audio } from "expo-av";
 
-export type DialogueRole = "user" | "assistant";
-export type DialogueMessage = { role: DialogueRole; text: string; translation?: string; correction?: string };
-export type EvaluationResult = { transcript: string; duration: number; overallScore: number; pronunciationScore: number; fluencyScore: number; accuracyScore: number; transcriptAccuracy: number; wordErrorRate: number; summary: string; issues: string[]; suggestions: string[] };
-
-const configuredBaseUrl = Constants.expoConfig?.extra?.apiBaseUrl ?? process.env.EXPO_PUBLIC_API_BASE_URL;
-
-export function getApiBaseUrl() {
-  return configuredBaseUrl ? configuredBaseUrl.replace(/\/$/, "") : "";
-}
-
-async function callMutation<T>(procedure: string, input: unknown): Promise<T> {
-  const baseUrl = getApiBaseUrl();
-  if (!baseUrl) throw new Error("尚未配置后端地址，请在 app.config.ts 或 EXPO_PUBLIC_API_BASE_URL 中设置。");
-  const response = await fetch(`${baseUrl}/api/trpc/${procedure}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ json: input })
-  });
-  const payload = await response.json() as { result?: { data?: { json?: T } }; error?: { json?: { message?: string } }; };
-  if (!response.ok) throw new Error(payload.error?.json?.message ?? `请求失败（${response.status}）`);
-  const result = payload.result?.data?.json;
-  if (result === undefined) throw new Error("服务端返回了无法识别的数据。");
-  return result;
-}
-
-export async function replyToDialogue(input: { level: "beginner" | "intermediate" | "advanced"; scene: "greetings" | "travel" | "business" | "housing" | "medical" | "banking" | "shopping" | "transit" | "government" | "school" | "restaurant" | "emergency"; history: DialogueMessage[]; userMessage: string }) {
-  return callMutation<{ reply: string; translation?: string; correction?: string; correctedEnglish?: string }>("dialogue.reply", input);
-}
-
-export async function translateToChinese(text: string) {
-  const value = text.trim();
-  if (!value) return value;
-  try {
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(value)}&langpair=en|zh-CN`);
-    const payload = await response.json() as { responseData?: { translatedText?: string } };
-    return payload.responseData?.translatedText?.trim() || "中文翻译暂不可用";
-  } catch {
-    return "中文翻译暂不可用";
-  }
-}
-
-export async function translateToEnglish(text: string) {
-  const value = text.trim();
-  if (!value) return value;
-  try {
-    const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(value)}&langpair=zh-CN|en`);
-    const payload = await response.json() as { responseData?: { translatedText?: string } };
-    const translated = payload.responseData?.translatedText?.trim();
-    return translated || value;
-  } catch {
-    return value;
-  }
-}
-
-async function readAudio(uri: string) {
-  if (!uri) throw new Error("没有找到真实录音文件，请重新录制。");
-  const audioBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-  if (!audioBase64) throw new Error("录音文件为空，请重新录制。");
-  return audioBase64;
-}
-
-export async function evaluateRecording(uri: string, targetSentence: string, mimeType = "audio/mp4") {
-  return callMutation<EvaluationResult>("voice.evaluate", { audioBase64: await readAudio(uri), mimeType, targetSentence, language: "en" });
-}
-
-export async function transcribeRecording(uri: string, mimeType = "audio/mp4", language: "auto" | "en" | "zh" = "auto") {
-  return callMutation<{ text: string; duration?: number }>("voice.transcribe", { audioBase64: await readAudio(uri), mimeType, language });
-}
-
-export async function checkGrammarError(userInput: string): Promise<{ hasError: boolean; correctedText: string; explanation: string }> {
-  try {
-    const res = await replyToDialogue({
-      level: "intermediate",
-      scene: "greetings",
-      history: [],
-      userMessage: `Please check and correct this sentence: "${userInput}". Provide corrections if needed.`
-    });
-    if (res.correction || res.correctedEnglish) {
-      return {
-        hasError: true,
-        correctedText: res.correctedEnglish || userInput,
-        explanation: res.correction || "句子表达不够标准，建议使用更地道的说法。"
-      };
-    }
-    return {
-      hasError: false,
-      correctedText: userInput,
-      explanation: "表达非常地道，没有发现明显错误！"
-    };
-  } catch {
-    return {
-      hasError: false,
-      correctedText: userInput,
-      explanation: "暂未发现语法错误或纠错服务无响应。"
-    };
-  }
-}
-
-export interface DialogueHistoryMessage {
-  role: 'user' | 'assistant';
+export type DialogueMessage = {
+  id?: string;
+  role: "user" | "assistant";
   text: string;
+  timestamp?: number | Date;
+};
+
+export type EvaluationResult = {
+  score?: number;
+  overallScore?: number;
+  feedback?: string;
+  grammar?: string[];
+  pronunciation?: string[];
+  vocabulary?: string[];
+  [key: string]: any;
+};
+
+export const getApiBaseUrl = (): string => {
+  return process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
+};
+
+/**
+ * 通用 tRPC Mutation 请求封装 (1:1 适配后端 tRPC 格式)
+ */
+async function callTrpcMutation<T>(path: string, inputData: Record<string, any>): Promise<T> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/trpc/${path}?batch=1`;
+
+  const bodyPayload = {
+    "0": {
+      json: inputData,
+    },
+  };
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(bodyPayload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`tRPC Mutation ${path} failed with HTTP status ${response.status}`);
+  }
+
+  const data = await response.json();
+
+  if (Array.isArray(data) && data[0]?.result?.data?.json) {
+    return data[0].result.data.json as T;
+  }
+
+  if (data?.result?.data?.json) {
+    return data.result.data.json as T;
+  }
+
+  throw new Error(`Invalid tRPC response structure from ${path}`);
 }
 
-export interface DialogueSuggestionsParams {
-  level: 'beginner' | 'intermediate' | 'advanced';
-  scene: 'greetings' | 'travel' | 'business' | 'housing' | 'medical' | 'banking' | 'shopping' | 'transit' | 'government' | 'school';
-  history: DialogueHistoryMessage[];
-  aiMessage: string;
-}
-
+/**
+ * 1. 获取对话回复提示 (dialogue.suggestions - tRPC POST Mutation)
+ */
 export async function fetchDialogueSuggestions(params: {
   level: string;
   scene: string;
@@ -119,118 +69,145 @@ export async function fetchDialogueSuggestions(params: {
   aiMessage: string;
 }): Promise<string[]> {
   try {
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
-    const url = `${baseUrl}/api/trpc/dialogue.suggestions?batch=1`;
-
-    // tRPC batch mutation payload
-    const bodyPayload = {
-      "0": {
-        json: {
-          level: params.level || "beginner",
-          scene: params.scene || "greetings",
-          history: params.history || [],
-          aiMessage: params.aiMessage || "",
-        }
-      }
-    };
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bodyPayload),
+    const res = await callTrpcMutation<{ suggestions: string[] }>("dialogue.suggestions", {
+      level: params.level || "beginner",
+      scene: params.scene || "greetings",
+      history: params.history || [],
+      aiMessage: params.aiMessage,
     });
-
-    if (!response.ok) {
-      console.warn("[fetchDialogueSuggestions] HTTP status:", response.status);
-      return [];
-    }
-
-    const data = await response.json();
-
-    // 适配 tRPC batch mutation 的响应数据解构
-    if (Array.isArray(data)) {
-      const firstItem = data[0];
-      const jsonRes = firstItem?.result?.data?.json;
-      if (Array.isArray(jsonRes)) {
-        return jsonRes;
-      }
-      if (jsonRes?.suggestions && Array.isArray(jsonRes.suggestions)) {
-        return jsonRes.suggestions;
-      }
-      if (firstItem?.result?.data && Array.isArray(firstItem.result.data)) {
-        return firstItem.result.data;
-      }
-    }
-
-    if (data?.result?.data?.json) {
-      const jsonRes = data.result.data.json;
-      if (Array.isArray(jsonRes)) return jsonRes;
-      if (jsonRes?.suggestions && Array.isArray(jsonRes.suggestions)) return jsonRes.suggestions;
-    }
-
-    return [];
-  } catch (err) {
-    console.error("[fetchDialogueSuggestions] Error:", err);
-    return [];
-  }
-}): Promise<string[]> {
-  try {
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
-    // 构造 tRPC query 参数
-    const inputPayload = JSON.stringify({
-      "0": {
-        json: {
-          level: params.level || "beginner",
-          scene: params.scene || "greetings",
-          history: params.history || [],
-          aiMessage: params.aiMessage || "",
-        }
-      }
-    });
-
-    const url = `${baseUrl}/api/trpc/dialogue.suggestions?batch=1&input=${encodeURIComponent(inputPayload)}`;
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("[fetchDialogueSuggestions] HTTP error:", response.status);
-      return [];
-    }
-
-    const data = await response.json();
-    
-    // 自动兼容各种 tRPC 响应格式与普通数组格式
-    if (Array.isArray(data)) {
-      const firstItem = data[0];
-      if (firstItem?.result?.data?.json && Array.isArray(firstItem.result.data.json)) {
-        return firstItem.result.data.json;
-      }
-      if (firstItem?.result?.data && Array.isArray(firstItem.result.data)) {
-        return firstItem.result.data;
-      }
-    }
-    if (data?.result?.data?.json && Array.isArray(data.result.data.json)) {
-      return data.result.data.json;
-    }
-    if (Array.isArray(data)) {
-      return data;
-    }
-
-    return [];
+    return res?.suggestions || [];
   } catch (err) {
     console.error("[fetchDialogueSuggestions] Error:", err);
     return [];
   }
 }
 
+/**
+ * 2. AI 对话回复 (dialogue.reply - tRPC POST Mutation)
+ */
+export async function replyToDialogue(params: {
+  level: string;
+  scene: string;
+  history: Array<{ role: "user" | "assistant"; text: string }>;
+  userMessage: string;
+}): Promise<string> {
+  try {
+    const res = await callTrpcMutation<{ reply: string }>("dialogue.reply", {
+      level: params.level || "beginner",
+      scene: params.scene || "greetings",
+      history: params.history || [],
+      userMessage: params.userMessage,
+    });
+    return res?.reply || "";
+  } catch (err) {
+    console.error("[replyToDialogue] Error:", err);
+    return "";
+  }
+}
 
+export const sendDialogueMessage = replyToDialogue;
 
+/**
+ * 3. 英文翻译为中文 (translation.toChinese - tRPC POST Mutation)
+ */
+export async function translateToChinese(text: string): Promise<string> {
+  try {
+    const res = await callTrpcMutation<{ translation: string }>("translation.toChinese", { text });
+    return res?.translation || "";
+  } catch (err) {
+    console.error("[translateToChinese] Error:", err);
+    return "";
+  }
+}
 
+/**
+ * 4. 中文表达生成英文 (translation.toEnglish - tRPC POST Mutation)
+ */
+export async function translateToEnglish(text: string): Promise<string> {
+  try {
+    const res = await callTrpcMutation<{ translation: string }>("translation.toEnglish", { text });
+    return res?.translation || "";
+  } catch (err) {
+    console.error("[translateToEnglish] Error:", err);
+    return "";
+  }
+}
 
+/**
+ * 5. 语音转文字 (API Route)
+ */
+export async function transcribeRecording(audioUri: string): Promise<string> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const formData = new FormData();
+    formData.append("file", {
+      uri: audioUri,
+      type: "audio/m4a",
+      name: "recording.m4a",
+    } as any);
 
+    const response = await fetch(`${baseUrl}/api/transcribe`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) return "";
+    const data = await response.json();
+    return data.text || "";
+  } catch (err) {
+    console.error("[transcribeRecording] Error:", err);
+    return "";
+  }
+}
+
+/**
+ * 6. 发音评估 (dialogue.evaluate)
+ */
+export async function evaluateRecording(params: {
+  audioUri?: string;
+  userText?: string;
+  referenceText?: string;
+}): Promise<EvaluationResult> {
+  try {
+    const res = await callTrpcMutation<EvaluationResult>("dialogue.evaluate", params);
+    return res || {};
+  } catch (err) {
+    console.error("[evaluateRecording] Error:", err);
+    return {};
+  }
+}
+
+/**
+ * 7. 语音合成 (TTS)
+ */
+export async function speakText(text: string): Promise<Audio.Sound | null> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/api/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) return null;
+
+    const blob = await response.blob();
+    const reader = new FileReader();
+
+    return new Promise((resolve) => {
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: base64data },
+          { shouldPlay: true }
+        );
+        resolve(sound);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("[speakText] Error:", error);
+    return null;
+  }
+}
