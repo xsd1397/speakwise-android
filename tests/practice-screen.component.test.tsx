@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
@@ -125,7 +125,7 @@ describe("PracticeScreen", () => {
 
     expect(screen.queryByLabelText("开始真实录音")).toBeNull();
     expect(screen.getByLabelText("开始 AI 录音")).toBeTruthy();
-    expect(screen.getByText("纠错")).toBeTruthy();
+    expect(screen.queryByText("纠错")).toBeNull();
   });
 
   it("appends a successful AI response and keeps whole-sentence speech", async () => {
