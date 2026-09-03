@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://speakwise.app";
+﻿const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -112,33 +112,125 @@ export interface DialogueSuggestionsParams {
   aiMessage: string;
 }
 
-export async function fetchDialogueSuggestions(params: DialogueSuggestionsParams): Promise<string[]> {
+export async function fetchDialogueSuggestions(params: {
+  level: string;
+  scene: string;
+  history: Array<{ role: "user" | "assistant"; text: string }>;
+  aiMessage: string;
+}): Promise<string[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/trpc/dialogue.suggestions`, {
-      method: 'POST',
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
+    const url = `${baseUrl}/api/trpc/dialogue.suggestions?batch=1`;
+
+    // tRPC batch mutation payload
+    const bodyPayload = {
+      "0": {
+        json: {
+          level: params.level || "beginner",
+          scene: params.scene || "greetings",
+          history: params.history || [],
+          aiMessage: params.aiMessage || "",
+        }
+      }
+    };
+
+    const response = await fetch(url, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        json: params,
-      }),
+      body: JSON.stringify(bodyPayload),
     });
+
+    if (!response.ok) {
+      console.warn("[fetchDialogueSuggestions] HTTP status:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+
+    // 适配 tRPC batch mutation 的响应数据解构
+    if (Array.isArray(data)) {
+      const firstItem = data[0];
+      const jsonRes = firstItem?.result?.data?.json;
+      if (Array.isArray(jsonRes)) {
+        return jsonRes;
+      }
+      if (jsonRes?.suggestions && Array.isArray(jsonRes.suggestions)) {
+        return jsonRes.suggestions;
+      }
+      if (firstItem?.result?.data && Array.isArray(firstItem.result.data)) {
+        return firstItem.result.data;
+      }
+    }
+
+    if (data?.result?.data?.json) {
+      const jsonRes = data.result.data.json;
+      if (Array.isArray(jsonRes)) return jsonRes;
+      if (jsonRes?.suggestions && Array.isArray(jsonRes.suggestions)) return jsonRes.suggestions;
+    }
+
+    return [];
+  } catch (err) {
+    console.error("[fetchDialogueSuggestions] Error:", err);
+    return [];
+  }
+}): Promise<string[]> {
+  try {
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
+    // 构造 tRPC query 参数
+    const inputPayload = JSON.stringify({
+      "0": {
+        json: {
+          level: params.level || "beginner",
+          scene: params.scene || "greetings",
+          history: params.history || [],
+          aiMessage: params.aiMessage || "",
+        }
+      }
+    });
+
+    const url = `${baseUrl}/api/trpc/dialogue.suggestions?batch=1&input=${encodeURIComponent(inputPayload)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.warn("[fetchDialogueSuggestions] HTTP error:", response.status);
+      return [];
+    }
 
     const data = await response.json();
     
-    if (data?.result?.data?.json?.suggestions) {
-      return data.result.data.json.suggestions;
+    // 自动兼容各种 tRPC 响应格式与普通数组格式
+    if (Array.isArray(data)) {
+      const firstItem = data[0];
+      if (firstItem?.result?.data?.json && Array.isArray(firstItem.result.data.json)) {
+        return firstItem.result.data.json;
+      }
+      if (firstItem?.result?.data && Array.isArray(firstItem.result.data)) {
+        return firstItem.result.data;
+      }
     }
-    if (Array.isArray(data?.suggestions)) {
-      return data.suggestions;
+    if (data?.result?.data?.json && Array.isArray(data.result.data.json)) {
+      return data.result.data.json;
+    }
+    if (Array.isArray(data)) {
+      return data;
     }
 
-    throw new Error('未返回有效的提示词数据');
-  } catch (error) {
-    console.error('获取回复提示失败:', error);
-    throw error;
+    return [];
+  } catch (err) {
+    console.error("[fetchDialogueSuggestions] Error:", err);
+    return [];
   }
 }
+
+
+
 
 
 

@@ -44,35 +44,29 @@ export default function PracticeScreen() {
     if (!showAiHints) {
       setShowAiHints(true);
       
-      // 提取最新的 AI 消息
-      const lastAiMsg = dialogue.slice().reverse().find((m) => m.role === "assistant")?.text;
-      if (!lastAiMsg) {
-        setApiSuggestions([]);
-        return;
-      }
+      // 获取当前最新的 AI 消息（倒序查找）
+      const lastAiMsg = dialogue.slice().reverse().find((m) => m.role === "assistant")?.text || "";
 
       setSuggestionsLoading(true);
       try {
-        // 1:1 对齐网页端后端要求的输入结构
         const history = dialogue.slice(-12).map((m) => ({
           role: m.role === "user" ? ("user" as const) : ("assistant" as const),
           text: m.text,
         }));
 
-        // 默认兜底为 'beginner' 和 'greetings'，确保不会产生未定义类型错误
-        const currentLevel = (typeof level === "string" && level) ? level : "beginner";
-        const currentScene = (typeof scene === "string" && scene) ? scene : "greetings";
+        const currentLevel = typeof level === "string" ? level : "beginner";
+        const currentScene = typeof scene === "string" ? scene : "greetings";
 
         const results = await fetchDialogueSuggestions({
-          level: currentLevel as any,
-          scene: currentScene as any,
+          level: currentLevel,
+          scene: currentScene,
           history,
           aiMessage: lastAiMsg,
         });
 
         setApiSuggestions(results);
       } catch (err) {
-        console.error("获取回复建议失败", err);
+        console.error("获取回复建议失败:", err);
         setApiSuggestions([]);
       } finally {
         setSuggestionsLoading(false);
@@ -123,6 +117,7 @@ export default function PracticeScreen() {
   <ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}><Pressable style={styles.modalBackdrop} onPress={() => setSelectedWord(null)}><View style={styles.wordCard}><Text style={styles.wordTitle}>{selectedWord}</Text><Text style={styles.phonetic}>{selectedDefinition?.phonetic ?? info?.phonetic}</Text><Text style={styles.wordMeaning}>{selectedDefinition?.meaning ?? info?.meaning}</Text><View style={styles.row}><Pressable onPress={() => selectedWord && speak(selectedWord)} style={styles.modalButton}><Text style={styles.actionText}>朗读单词</Text></Pressable><Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}><Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text></Pressable></View><Pressable onPress={() => setSelectedWord(null)}><Text style={styles.muted}>关闭卡片</Text></Pressable></View></Pressable></ModalComponent></ScreenContainer>;
 }
 const styles = StyleSheet.create({ flex: { flex: 1 }, content: { padding: 18, paddingBottom: 40, gap: 16, backgroundColor: COLORS.bg }, nav: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, brand: { color: COLORS.text, fontSize: 23, fontWeight: "900" }, kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, padding: 14, backgroundColor: COLORS.panel }, sectionLabel: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, row: { flexDirection: "row", gap: 10 }, level: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginTop: 12 }, active: { backgroundColor: COLORS.blue, borderColor: "#78A1FF" }, levelTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, levelSub: { color: COLORS.muted, marginTop: 4 }, sceneGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, scene: { width: "31%", minHeight: 86, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 10, marginTop: 10 }, sceneTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14 }, sceneSub: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 6 }, eyebrow: { color: "#7EA5FF", fontSize: 12, fontWeight: "900", marginTop: 4 }, heroTitle: { color: COLORS.text, fontSize: 32, fontWeight: "900", marginTop: 2 }, heroSub: { color: COLORS.muted, fontSize: 14, lineHeight: 21 }, target: { backgroundColor: "#162A57", borderRadius: 18, padding: 18, borderWidth: 1, borderColor: "#426FD4" }, card: { backgroundColor: COLORS.panel, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, padding: 16 }, cardLabel: { color: "#A9C1FF", fontWeight: "900" }, sentence: { color: COLORS.text, fontSize: 19, lineHeight: 29, fontWeight: "700", marginTop: 9 }, word: { color: COLORS.text }, translation: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7 }, primary: { backgroundColor: COLORS.blue, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 }, primaryText: { color: "#fff", fontWeight: "900" }, cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, sectionTitle: { color: COLORS.text, fontSize: 19, fontWeight: "900", marginTop: 4 }, muted: { color: COLORS.muted, fontSize: 12 }, line: { borderTopWidth: 1, borderTopColor: "#292C33", paddingVertical: 15 }, lineTop: { flexDirection: "row", gap: 8, alignItems: "center" }, speaker: { color: "#8DB0FF", fontWeight: "900" }, role: { color: COLORS.muted, fontSize: 11 }, actions: { flexDirection: "row", gap: 8, marginTop: 11 }, action: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 }, actionText: { color: COLORS.text, fontSize: 11, fontWeight: "800" }, recording: { backgroundColor: "#8B3D4A", borderColor: "#D46B7A" }, helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 7 }, thread: { gap: 8, marginTop: 14 }, aiCard: { minHeight: 430 }, hints: { gap: 6, marginTop: 8 }, hint: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 9 }, bubble: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border }, user: { backgroundColor: "#17213A" }, assistant: { backgroundColor: "#191B20" }, inputRow: { flexDirection: "row", gap: 8, marginTop: 14 }, input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 }, send: { backgroundColor: COLORS.blue, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" }, recordStatus: { color: COLORS.muted, textAlign: "center" }, error: { color: "#FF9CA9", fontSize: 12, marginTop: 8 }, score: { backgroundColor: "#182C25", padding: 14, borderRadius: 14 }, scoreValue: { color: "#73E2A8", fontSize: 38, fontWeight: "900" }, backTop: { alignSelf: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, phonetic: { color: "#8DB0FF", fontSize: 18 }, wordMeaning: { color: COLORS.text, fontSize: 16 }, modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 } });
+
 
 
 
