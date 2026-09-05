@@ -6,6 +6,7 @@ on:
       api_base_url:
         description: "Public SpeakWise API origin"
         required: true
+        default: "https://speakwise-wsicpu2u.manus.space"
         type: string
 
 permissions:
