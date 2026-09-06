@@ -1,163 +1,199 @@
-﻿export type DialogueMessage = {
-  id?: string;
-  role: "user" | "assistant";
+// lib/api.ts
+
+export interface DialogueMessage {
+  role: 'user' | 'assistant';
   text: string;
   translation?: string;
-  timestamp?: number | Date;
-  [key: string]: any;
-};
+  correction?: string;
+}
 
-export type EvaluationResult = {
-  score?: number;
-  overallScore?: number;
-  feedback?: string;
-  grammar?: string[];
-  pronunciation?: string[];
-  vocabulary?: string[];
-  [key: string]: any;
-};
+export interface EvaluationResult {
+  overallScore: number;
+  pronunciationScore: number;
+  fluencyScore: number;
+  accuracyScore: number;
+  transcript: string;
+  summary: string;
+}
 
-export const getApiBaseUrl = (): string => {
-  return process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
-};
+export interface ReplyResponse {
+  reply: string;
+  translation?: string;
+  correction?: string;
+  correctedEnglish?: string;
+}
 
-async function callTrpcMutation<T>(path: string, inputData: Record<string, any>): Promise<T> {
+export interface SuggestionsResponse {
+  suggestions: string[];
+}
+
+export interface PreflightResult {
+  isEnglish?: boolean;
+  hasError?: boolean;
+  hasErrors?: boolean;
+  originalText?: string;
+  correctedText?: string;
+  translatedText?: string;
+  suggestion?: string;
+  explanation?: string;
+}
+
+// 获取配置的 API Base URL，带有静态后端兜底地址
+export function getApiBaseUrl(): string {
+  return process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_API_URL || 'https://speakwise-wsicpu2u.manus.space';
+}
+
+// 评估录音评分（修复 FormData 兼容性问题）
+export async function evaluateRecording(
+  uri: string,
+  targetText: string
+): Promise<EvaluationResult> {
   const baseUrl = getApiBaseUrl();
-  const url = `${baseUrl}/api/trpc/${path}?batch=1`;
+  
+  // 通过 fetch 将本地文件转化为 Blob 兼容格式，解决 Unsupported FormDataPart implementation 报错
+  const responseFile = await fetch(uri);
+  const blob = await responseFile.blob();
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ "0": { json: inputData } }),
+  const formData = new FormData();
+  formData.append('file', blob, 'audio.m4a');
+  formData.append('targetText', targetText);
+
+  const res = await fetch(`${baseUrl}/api/evaluate`, {
+    method: 'POST',
+    body: formData,
   });
 
-  if (!response.ok) {
-    throw new Error(`tRPC ${path} failed: ${response.status}`);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`录音评分请求失败: ${res.status} ${errText}`);
   }
-
-  const data = await response.json();
-  if (Array.isArray(data) && data[0]?.result?.data?.json) {
-    return data[0].result.data.json as T;
-  }
-  if (data?.result?.data?.json) {
-    return data.result.data.json as T;
-  }
-  return data as T;
+  return res.json();
 }
 
-export async function fetchDialogueSuggestions(params: {
-  level: string;
-  scene: string;
-  history: Array<{ role: "user" | "assistant"; text: string }>;
-  aiMessage: string;
-}): Promise<string[]> {
-  try {
-    const res = await callTrpcMutation<any>("dialogue.suggestions", {
-      level: params.level || "beginner",
-      scene: params.scene || "greetings",
-      history: params.history || [],
-      aiMessage: params.aiMessage,
-    });
-    return res?.suggestions || [];
-  } catch (err) {
-    return [];
-  }
-}
-
+// AI 对话回复
 export async function replyToDialogue(params: {
   level: string;
   scene: string;
-  history: Array<{ role: "user" | "assistant"; text: string }>;
+  history: DialogueMessage[];
   userMessage: string;
-}): Promise<any> {
-  try {
-    const res = await callTrpcMutation<any>("dialogue.reply", {
-      level: params.level || "beginner",
-      scene: params.scene || "greetings",
-      history: params.history || [],
-      userMessage: params.userMessage,
-    });
-    return res || { reply: "" };
-  } catch (err) {
-    return { reply: "" };
-  }
+}): Promise<ReplyResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/reply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) throw new Error('AI 对话请求失败');
+  return res.json();
 }
 
-export async function sendDialogueMessage(params: {
+// 获取回复提示建议
+export async function getReplySuggestions(params: {
   level: string;
   scene: string;
-  history: Array<{ role: "user" | "assistant"; text: string }>;
-  userMessage: string;
-}): Promise<any> {
-  return replyToDialogue(params);
+  history: { role: string; text: string }[];
+  aiMessage: string;
+}): Promise<SuggestionsResponse> {
+  const baseUrl = getApiBaseUrl();
+  const res = await fetch(`${baseUrl}/api/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) throw new Error('获取建议失败');
+  return res.json();
 }
 
-export async function translateToChinese(text: string): Promise<string> {
-  try {
-    const res = await callTrpcMutation<any>("translation.toChinese", { text });
-    return res?.translation || "";
-  } catch (err) {
-    return "";
+// 预检/纠错检查（用于 ChatControlBar 组件）
+export async function processPreflightCheck(
+  text: string
+): Promise<PreflightResult> {
+  const baseUrl = getApiBaseUrl();
+  const fallbackResult: PreflightResult = {
+    isEnglish: true,
+    hasError: false,
+    hasErrors: false,
+    originalText: text,
+    correctedText: text,
+    translatedText: text,
+  };
+
+  if (!baseUrl) {
+    return fallbackResult;
   }
-}
 
-export async function translateToEnglish(text: string): Promise<string> {
   try {
-    const res = await callTrpcMutation<any>("translation.toEnglish", { text });
-    return res?.translation || "";
-  } catch (err) {
-    return "";
-  }
-}
-
-export async function transcribeRecording(audioUri: string, mimeType?: string, language?: string): Promise<{ text: string }> {
-  try {
-    const baseUrl = getApiBaseUrl();
-    const formData = new FormData();
-    formData.append("file", {
-      uri: audioUri,
-      type: mimeType || "audio/m4a",
-      name: "recording.m4a",
-    } as any);
-
-    const response = await fetch(`${baseUrl}/api/transcribe`, {
-      method: "POST",
-      body: formData,
-    });
-    if (!response.ok) return { text: "" };
-    const data = await response.json();
-    return { text: data.text || "" };
-  } catch (err) {
-    return { text: "" };
-  }
-}
-
-// 适配 index.tsx 传入的 (audioUri, referenceText) 两个参数
-export async function evaluateRecording(audioUri?: string | { audioUri?: string; userText?: string; referenceText?: string }, referenceText?: string): Promise<EvaluationResult> {
-  try {
-    let payload: any = {};
-    if (typeof audioUri === "object" && audioUri !== null) {
-      payload = audioUri;
-    } else {
-      payload = { audioUri, referenceText };
-    }
-    return await callTrpcMutation<EvaluationResult>("dialogue.evaluate", payload);
-  } catch (err) {
-    return {};
-  }
-}
-
-export async function speakText(text: string): Promise<any> {
-  try {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/api/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch(`${baseUrl}/api/preflight`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
     });
-    if (!response.ok) return null;
-    return await response.blob();
-  } catch (error) {
-    return null;
+
+    if (!res.ok) throw new Error('预检请求失败');
+    return await res.json();
+  } catch {
+    return fallbackResult;
+  }
+}
+
+// 录音转文字 (STT)（同样修复 FormData 兼容性问题）
+export async function transcribeRecording(
+  uri: string,
+  mimeType: string = 'audio/mp4',
+  language: string = 'auto'
+): Promise<{ text: string }> {
+  const baseUrl = getApiBaseUrl();
+  
+  const responseFile = await fetch(uri);
+  const blob = await responseFile.blob();
+
+  const formData = new FormData();
+  formData.append('file', blob, 'audio.m4a');
+  formData.append('language', language);
+
+  const res = await fetch(`${baseUrl}/api/transcribe`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error('语音识别失败');
+  return res.json();
+}
+
+// 中文翻译
+export async function translateToChinese(text: string): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) return text;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, targetLang: 'zh' }),
+    });
+    const data = await res.json();
+    return data.translation || text;
+  } catch {
+    return text;
+  }
+}
+
+// 英文翻译
+export async function translateToEnglish(text: string): Promise<string> {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) return text;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, targetLang: 'en' }),
+    });
+    const data = await res.json();
+    return data.translation || text;
+  } catch {
+    return text;
   }
 }
