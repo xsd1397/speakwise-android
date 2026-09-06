@@ -1,5 +1,4 @@
 import type { Voice } from "expo-speech";
-import { Audio } from "expo-av";
 
 export type Speaker = "Alex" | "Mia";
 
@@ -45,10 +44,16 @@ export function getSpeechRate(rate: number) {
   return Math.max(0.5, Math.min(2, rate));
 }
 
-let activeRecording: Audio.Recording | null = null;
+let activeRecording: any = null;
 
 export async function startAudioRecording(): Promise<void> {
   try {
+    // 使用动态 require 避免在测试环境和类型检查时因静态解析原生模块报错
+    // @ts-ignore
+    const ExpoAV = typeof window !== "undefined" ? require("expo-av") : require("expo-av");
+    const Audio = ExpoAV?.Audio;
+    if (!Audio) throw new Error("Audio module not found in expo-av");
+
     const permission = await Audio.requestPermissionsAsync();
     if (!permission.granted) {
       throw new Error("Microphone permission not granted");
