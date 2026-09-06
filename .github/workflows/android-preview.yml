@@ -22,16 +22,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
+          node-version: "20"
+          cache: npm
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -43,15 +38,15 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Generate native Android project
         env:
           CI: "1"
-        run: pnpm exec expo prebuild --platform android --no-install
+        run: npx expo prebuild --platform android --no-install
 
       - name: Validate TypeScript and tests
-        run: pnpm typecheck && pnpm test && pnpm test:components
+        run: npm run typecheck && npm run test && npm run test:components
 
       - name: Build release APK with Gradle
         working-directory: android
