@@ -38,7 +38,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --include=optional
 
       - name: Generate native Android project
         env:
