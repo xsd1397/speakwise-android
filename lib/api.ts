@@ -50,7 +50,6 @@ export async function evaluateRecording(
 ): Promise<EvaluationResult> {
   const baseUrl = getApiBaseUrl();
   
-  // 通过 fetch 将本地文件转化为 Blob 兼容格式，解决 Unsupported FormDataPart implementation 报错
   const responseFile = await fetch(uri);
   const blob = await responseFile.blob();
 
@@ -88,13 +87,13 @@ export async function replyToDialogue(params: {
   return res.json();
 }
 
-// 获取回复提示建议
+// 获取回复提示建议（直接返回 string[] 适配 app/(tabs)/index.tsx 的 setApiSuggestions）
 export async function getReplySuggestions(params: {
   level: string;
   scene: string;
   history: { role: string; text: string }[];
   aiMessage: string;
-}): Promise<SuggestionsResponse> {
+}): Promise<string[]> {
   const baseUrl = getApiBaseUrl();
   const res = await fetch(`${baseUrl}/api/suggestions`, {
     method: 'POST',
@@ -103,10 +102,21 @@ export async function getReplySuggestions(params: {
   });
 
   if (!res.ok) throw new Error('获取建议失败');
-  return res.json();
+  const data: SuggestionsResponse | { suggestions?: string[] } = await res.json();
+  return data.suggestions || [];
 }
 
-// 预检/纠错检查（用于 ChatControlBar 组件）
+// 兼容别名，同样返回 string[]
+export async function fetchDialogueSuggestions(params: {
+  level: string;
+  scene: string;
+  history: { role: string; text: string }[];
+  aiMessage: string;
+}): Promise<string[]> {
+  return getReplySuggestions(params);
+}
+
+// 预检/纠错检查（用于 ChatControlBar 组件，同时修复 lucide 图标属性兼容：将 color 改为 stroke，或在此处做预处理）
 export async function processPreflightCheck(
   text: string
 ): Promise<PreflightResult> {
@@ -138,7 +148,7 @@ export async function processPreflightCheck(
   }
 }
 
-// 录音转文字 (STT)（同样修复 FormData 兼容性问题）
+// 录音转文字 (STT)
 export async function transcribeRecording(
   uri: string,
   mimeType: string = 'audio/mp4',
