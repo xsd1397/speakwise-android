@@ -1,4 +1,4 @@
-﻿export type DialogueMessage = {
+export type DialogueMessage = {
   id?: string;
   role: "user" | "assistant";
   text: string;
@@ -132,17 +132,60 @@ export async function transcribeRecording(audioUri: string, mimeType?: string, l
   }
 }
 
-// 适配 index.tsx 传入的 (audioUri, referenceText) 两个参数
-export async function evaluateRecording(audioUri?: string | { audioUri?: string; userText?: string; referenceText?: string }, referenceText?: string): Promise<EvaluationResult> {
+// 适配 index.tsx 传入的 (audioUri, referenceText) 两个参数或 FormData 上传
+export async function evaluateRecording(
+  audioUri?: string | { audioUri?: string; userText?: string; referenceText?: string },
+  referenceText?: string
+): Promise<EvaluationResult> {
   try {
+    const baseUrl = getApiBaseUrl();
+    let uri: string | undefined;
+    let refText: string | undefined;
+
+    if (typeof audioUri === "object" && audioUri !== null) {
+      uri = audioUri.audioUri || audioUri.userText;
+      refText = audioUri.referenceText;
+    } else {
+      uri = audioUri;
+      refText = referenceText;
+    }
+
+    // 如果传入的是本地音频文件 URI，则使用 FormData 提交到 /api/evaluate 接口
+    if (uri && (uri.startsWith("file://") || uri.startsWith("content://") || uri.startsWith("blob:") || uri.includes("/"))) {
+      const formData = new FormData();
+      formData.append("file", {
+        uri: uri,
+        type: "audio/m4a",
+        name: "recording.m4a",
+      } as any);
+
+      if (refText) {
+        formData.append("referenceText", refText);
+      }
+
+      const response = await fetch(`${baseUrl}/api/evaluate`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Evaluation HTTP error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data as EvaluationResult;
+    }
+
+    // 否则回退走原有的 tRPC 突变调用逻辑
     let payload: any = {};
     if (typeof audioUri === "object" && audioUri !== null) {
       payload = audioUri;
     } else {
-      payload = { audioUri, referenceText };
+      payload = { audioUri: uri, referenceText: refText };
     }
     return await callTrpcMutation<EvaluationResult>("dialogue.evaluate", payload);
   } catch (err) {
+    console.error("evaluateRecording error:", err);
     return {};
   }
 }

@@ -1,4 +1,5 @@
 import type { Voice } from "expo-speech";
+import { Audio } from "expo-av";
 
 export type Speaker = "Alex" | "Mia";
 
@@ -42,4 +43,50 @@ export function selectVoiceForSpeaker(voices: Voice[], speaker: Speaker): VoiceS
 
 export function getSpeechRate(rate: number) {
   return Math.max(0.5, Math.min(2, rate));
+}
+
+let activeRecording: Audio.Recording | null = null;
+
+export async function startAudioRecording(): Promise<void> {
+  try {
+    const permission = await Audio.requestPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error("Microphone permission not granted");
+    }
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    if (activeRecording) {
+      try {
+        await activeRecording.stopAndUnloadAsync();
+      } catch {}
+      activeRecording = null;
+    }
+
+    const { recording } = await Audio.Recording.createAsync(
+      Audio.RecordingOptionsPresets.HIGH_QUALITY
+    );
+    activeRecording = recording;
+  } catch (err) {
+    console.error("Failed to start audio recording:", err);
+    throw err;
+  }
+}
+
+export async function stopAudioRecording(): Promise<string | null> {
+  if (!activeRecording) return null;
+
+  try {
+    await activeRecording.stopAndUnloadAsync();
+    const uri = activeRecording.getURI();
+    activeRecording = null;
+    return uri;
+  } catch (err) {
+    console.error("Failed to stop audio recording:", err);
+    activeRecording = null;
+    return null;
+  }
 }
