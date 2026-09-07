@@ -1,9 +1,10 @@
-﻿export type DialogueMessage = {
+export type DialogueMessage = {
   id?: string;
   role: "user" | "assistant";
   text: string;
   translation?: string;
   timestamp?: number | Date;
+  evaluation?: EvaluationResult;
   [key: string]: any;
 };
 
@@ -50,7 +51,7 @@ export async function fetchDialogueSuggestions(params: {
   scene: string;
   history: Array<{ role: "user" | "assistant"; text: string }>;
   aiMessage: string;
-}): Promise<string[]> {
+}) {
   try {
     const res = await callTrpcMutation<any>("dialogue.suggestions", {
       level: params.level || "beginner",
@@ -69,7 +70,7 @@ export async function replyToDialogue(params: {
   scene: string;
   history: Array<{ role: "user" | "assistant"; text: string }>;
   userMessage: string;
-}): Promise<any> {
+}) {
   try {
     const res = await callTrpcMutation<any>("dialogue.reply", {
       level: params.level || "beginner",
@@ -79,85 +80,45 @@ export async function replyToDialogue(params: {
     });
     return res || { reply: "" };
   } catch (err) {
-    return { reply: "" };
+    console.error("replyToDialogue error:", err);
+    throw err;
   }
 }
 
-export async function sendDialogueMessage(params: {
-  level: string;
-  scene: string;
-  history: Array<{ role: "user" | "assistant"; text: string }>;
-  userMessage: string;
-}): Promise<any> {
-  return replyToDialogue(params);
-}
-
-export async function translateToChinese(text: string): Promise<string> {
+export async function transcribeRecording(params: {
+  audioBase64: string;
+  mimeType?: string;
+}) {
   try {
-    const res = await callTrpcMutation<any>("translation.toChinese", { text });
-    return res?.translation || "";
-  } catch (err) {
-    return "";
-  }
-}
-
-export async function translateToEnglish(text: string): Promise<string> {
-  try {
-    const res = await callTrpcMutation<any>("translation.toEnglish", { text });
-    return res?.translation || "";
-  } catch (err) {
-    return "";
-  }
-}
-
-export async function transcribeRecording(audioUri: string, mimeType?: string, language?: string): Promise<{ text: string }> {
-  try {
-    const baseUrl = getApiBaseUrl();
-    const formData = new FormData();
-    formData.append("file", {
-      uri: audioUri,
-      type: mimeType || "audio/m4a",
-      name: "recording.m4a",
-    } as any);
-
-    const response = await fetch(`${baseUrl}/api/transcribe`, {
-      method: "POST",
-      body: formData,
+    const res = await callTrpcMutation<any>("audio.transcribe", {
+      audioBase64: params.audioBase64,
+      mimeType: params.mimeType || "audio/m4a",
     });
-    if (!response.ok) return { text: "" };
-    const data = await response.json();
-    return { text: data.text || "" };
+    return res || { text: "" };
   } catch (err) {
-    return { text: "" };
+    console.error("transcribeRecording error:", err);
+    throw err;
   }
 }
 
-// 适配 index.tsx 传入的 (audioUri, referenceText) 两个参数
-export async function evaluateRecording(audioUri?: string | { audioUri?: string; userText?: string; referenceText?: string }, referenceText?: string): Promise<EvaluationResult> {
+export async function evaluateRecording(params: {
+  text: string;
+  audioBase64?: string;
+  targetText?: string;
+  level?: string;
+  scene?: string;
+}): Promise<EvaluationResult> {
   try {
-    let payload: any = {};
-    if (typeof audioUri === "object" && audioUri !== null) {
-      payload = audioUri;
-    } else {
-      payload = { audioUri, referenceText };
-    }
-    return await callTrpcMutation<EvaluationResult>("dialogue.evaluate", payload);
-  } catch (err) {
-    return {};
-  }
-}
-
-export async function speakText(text: string): Promise<any> {
-  try {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/api/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+    const res = await callTrpcMutation<any>("dialogue.evaluate", {
+      text: params.text,
+      audioBase64: params.audioBase64,
+      targetText: params.targetText,
+      level: params.level || "beginner",
+      scene: params.scene || "greetings",
     });
-    if (!response.ok) return null;
-    return await response.blob();
-  } catch (error) {
-    return null;
+    return res || { score: 85, overallScore: 85, feedback: "Good effort!" };
+  } catch (err) {
+    console.error("evaluateRecording error:", err);
+    throw err;
   }
 }

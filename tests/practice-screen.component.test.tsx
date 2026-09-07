@@ -1,18 +1,19 @@
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 
-// ✅ 1. 使用 default import 导入页面组件
+// 使用 default import 匹配 export default IndexScreen
 import IndexScreen from "../app/(tabs)/index";
 
-// 2. 导入场景数据，用于遍历验证渲染
+// 场景配置数据
 import { SCENES } from "../lib/data";
 
-// 3. Mock 原生语音与音频模块 (Expo Native Modules)
+// Mock Expo 语音模块
 jest.mock("expo-speech", () => ({
   speak: jest.fn(),
   stop: jest.fn(),
 }));
 
+// Mock Expo 音频录制模块（含 useAudioRecorderState）
 jest.mock("expo-audio", () => ({
   useAudioRecorder: jest.fn(() => ({
     prepareToRecordAsync: jest.fn().mockResolvedValue(undefined),
@@ -20,12 +21,17 @@ jest.mock("expo-audio", () => ({
     stop: jest.fn().mockResolvedValue(undefined),
     uri: "mock-recording-uri",
   })),
+  useAudioRecorderState: jest.fn(() => ({
+    isRecording: false,
+    recordingTime: 0,
+    meter: -160,
+  })),
   RecordingPresets: { HIGH_QUALITY: {} },
   requestRecordingPermissionsAsync: jest.fn().mockResolvedValue({ status: "granted" }),
   setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
-// 4. Mock API 交互模块，避免测试引发真实网络请求
+// Mock API 请求
 jest.mock("../lib/api", () => ({
   replyToDialogue: jest.fn().mockResolvedValue({ reply: "Hello back!" }),
   fetchDialogueSuggestions: jest.fn().mockResolvedValue(["Suggestion 1", "Suggestion 2"]),
@@ -39,15 +45,20 @@ jest.mock("../lib/api", () => ({
 }));
 
 describe("PracticeScreen", () => {
-  it("renders every configured practice scene", () => {
+  it("renders every configured practice scene", async () => {
     const { getByText } = render(<IndexScreen />);
 
-    // 验证页面顶部标题
+    // 验证页面主标题渲染
     expect(getByText("SpeakWise AI Coach")).toBeTruthy();
 
-    // 验证 lib/data.ts 中配置的所有场景标题是否都已成功渲染到界面
+    // 验证场景列表中所有 Scene 标题渲染
     SCENES.forEach((scene) => {
       expect(getByText(scene.title)).toBeTruthy();
+    });
+
+    // ✅ 等待 useEffect 中的异步 fetchDialogueSuggestions 状态更新完成，消除 act 警告
+    await waitFor(() => {
+      expect(getByText("Suggestion 1")).toBeTruthy();
     });
   });
 });

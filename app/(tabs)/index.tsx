@@ -1,124 +1,671 @@
-﻿import { fetchDialogueSuggestions } from '../../lib/api';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  SafeAreaView,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Modal,
+} from "react-native";
 import * as Speech from "expo-speech";
-import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder, useAudioRecorderState } from "expo-audio";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { ScreenContainer } from "@/components/ScreenContainer";
-import { evaluateRecording, getApiBaseUrl, replyToDialogue, transcribeRecording, translateToChinese, translateToEnglish, type DialogueMessage, type EvaluationResult } from "@/lib/api";
-import { getLevelLabel, getPracticeDialogue, LEVELS, SCENES, type LevelKey, type SceneKey, type Speaker } from "@/lib/data";
-import { getSpeechRate, selectVoiceForSpeaker } from "@/lib/voice";
-import { getWordDefinition, lookupWordDefinition, type WordDefinition } from "@/lib/word";
-import { useWordbook } from "@/lib/wordbook";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
+import { SCENES } from "../../lib/data";
+import {
+  replyToDialogue,
+  fetchDialogueSuggestions,
+  transcribeRecording,
+  evaluateRecording,
+  DialogueMessage,
+  EvaluationResult,
+} from "../../lib/api";
 
-const ModalComponent = Modal ?? View;
-const COLORS = { bg: "#0B0C0F", panel: "#111317", panel2: "#151820", border: "#3A3D45", text: "#F2F3F5", muted: "#9AA2B4", blue: "#2F6BEB", blueSoft: "#1D3D86", orange: "#FFB15C" };
-function wordInfo(word: string) { return getWordDefinition(word); }
-function voiceSpeaker(speaker: Speaker): "Alex" | "Mia" { return ["Mia", "Agent", "Lee", "Landlord", "Receptionist", "Banker", "Server", "StationAgent", "Clerk", "Teacher"].includes(speaker) ? "Mia" : "Alex"; }
-function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) { return <Text style={styles.sentence}>{text.split(/(\s+)/).map((part, i) => /\s+/.test(part) ? part : <Text key={`${part}-${i}`} onPress={() => onWord(part)} style={styles.word}>{part}</Text>)}</Text>; }
+type Scene = (typeof SCENES)[number];
 
+export default function IndexScreen() {
+  const [selectedScene, setSelectedScene] = useState<Scene>(SCENES[0]);
+  const [messages, setMessages] = useState<DialogueMessage[]>([
+    {
+      id: "1",
+      role: "assistant",
+      text: `Hello! Let's practice conversation for: ${selectedScene.title}. How can I help you today?`,
+      timestamp: Date.now(),
+    },
+  ]);
+  const [inputText, setInputText] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationResult | null>(null);
 
-export default function PracticeScreen() {
-  const scrollRef = useRef<ScrollView>(null);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recorderState = useAudioRecorderState(recorder, 250);
-  const aiRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const aiRecorderState = useAudioRecorderState(aiRecorder, 250);
-  const [level, setLevel] = useState<LevelKey>("beginner");
-  const [scene, setScene] = useState<SceneKey>("greetings");
-  const [voices, setVoices] = useState<Speech.Voice[]>([]);
-  const [selectedWord, setSelectedWord] = useState<string | null>(null);
-  const [selectedDefinition, setSelectedDefinition] = useState<WordDefinition | null>(null);
-  const [selectedExample, setSelectedExample] = useState("");
-  const { words: savedWords, toggleWord, hasWord } = useWordbook();
-  const [translated, setTranslated] = useState<Record<string, boolean>>({});
-  const [recordingLine, setRecordingLine] = useState<string | null>(null);
-  const [recordingMessage, setRecordingMessage] = useState("点击句子右侧“录音评分”，完成后将在当前句下显示 6 秒评分详情");
-  const [aiRecording, setAiRecording] = useState(false);
-  const [aiRecordingUri, setAiRecordingUri] = useState<string | null>(null);
-  const [aiRecordingMessage, setAiRecordingMessage] = useState("可输入中文，发送前会自动转换为自然英文表达");
-  const [showAiHints, setShowAiHints] = useState(false);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [apiSuggestions, setApiSuggestions] = useState<string[]>([]);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  const handleToggleHints = async () => {
-    if (!showAiHints) {
-      setShowAiHints(true);
-      
-      // 获取当前最新的 AI 消息（倒序查找）
-      const lastAiMsg = dialogue.slice().reverse().find((m) => m.role === "assistant")?.text || "";
+  // 场景切换
+  const handleSelectScene = (scene: Scene) => {
+    setSelectedScene(scene);
+    const initialMsg: DialogueMessage = {
+      id: Date.now().toString(),
+      role: "assistant",
+      text: `Hello! Let's practice conversation for: ${scene.title}. How can I help you today?`,
+      timestamp: Date.now(),
+    };
+    setMessages([initialMsg]);
+    setSuggestions([]);
+  };
 
-      setSuggestionsLoading(true);
-      try {
-        const history = dialogue.slice(-12).map((m) => ({
-          role: m.role === "user" ? ("user" as const) : ("assistant" as const),
-          text: m.text,
-        }));
+  // 自动获取快捷建议
+  useEffect(() => {
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === "assistant") {
+      fetchDialogueSuggestions({
+        level: "beginner",
+        scene: selectedScene.key,
+        history: messages.slice(0, -1).map((m) => ({ role: m.role, text: m.text })),
+        aiMessage: lastMsg.text,
+      })
+        .then((sugs) => {
+          if (Array.isArray(sugs)) {
+            setSuggestions(sugs);
+          }
+        })
+        .catch(() => setSuggestions([]));
+    }
+  }, [messages, selectedScene]);
 
-        const currentLevel = typeof level === "string" ? level : "beginner";
-        const currentScene = typeof scene === "string" ? scene : "greetings";
+  // 发送文本消息
+  const handleSendMessage = async (textToSend?: string) => {
+    const content = textToSend || inputText;
+    if (!content.trim() || isLoading) return;
 
-        const results = await fetchDialogueSuggestions({
-          level: currentLevel,
-          scene: currentScene,
-          history,
-          aiMessage: lastAiMsg,
-        });
+    const userMsg: DialogueMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      text: content.trim(),
+      timestamp: Date.now(),
+    };
 
-        setApiSuggestions(results);
-      } catch (err) {
-        console.error("获取回复建议失败:", err);
-        setApiSuggestions([]);
-      } finally {
-        setSuggestionsLoading(false);
-      }
-    } else {
-      setShowAiHints(false);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
+    if (!textToSend) setInputText("");
+    setIsLoading(true);
+
+    try {
+      const response = await replyToDialogue({
+        level: "beginner",
+        scene: selectedScene.key,
+        history: messages.map((m) => ({ role: m.role, text: m.text })),
+        userMessage: content.trim(),
+      });
+
+      const replyText = response?.reply || response?.message || "I hear you. Let's keep practicing!";
+      const assistantMsg: DialogueMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        text: replyText,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch (error) {
+      console.error("Failed to send dialogue message:", error);
+      const errorMsg: DialogueMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        text: "❌ Network error or connection failed, please try again.",
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
     }
   };
-  const [recordingError, setRecordingError] = useState<string | null>(null);
-  const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
-  const [lineEvaluation, setLineEvaluation] = useState<{ lineId: string; result: EvaluationResult } | null>(null);
-  const evaluationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [evaluationLoading, setEvaluationLoading] = useState(false);
-  const [input, setInput] = useState("");
-  const [translationLoading, setTranslationLoading] = useState(false);
-  const [dialogue, setDialogue] = useState<DialogueMessage[]>([]);
-  const [replyLoading, setReplyLoading] = useState(false);
-  const [replyError, setReplyError] = useState<string | null>(null);
-  const showLineEvaluation = (lineId: string, result: EvaluationResult) => { if (evaluationTimer.current) clearTimeout(evaluationTimer.current); setLineEvaluation({ lineId, result }); evaluationTimer.current = setTimeout(() => setLineEvaluation(null), 6000); };
-  const lines = useMemo(() => getPracticeDialogue(scene, level), [scene, level]);
-  const target = lines[0];
-  useEffect(() => { setDialogue([{ role: "assistant", text: target.text, translation: target.translation }]); setTranslated({}); setAiRecordingMessage("可输入中文，发送前会自动转换为自然英文表达"); }, [scene, level, target.text]);
-  useEffect(() => { Speech.getAvailableVoicesAsync().then(setVoices).catch(() => setVoices([])); return () => { Speech.stop?.(); }; }, []);
-  useEffect(() => { if (!selectedWord) { setSelectedDefinition(null); setSelectedExample(""); return; } setSelectedDefinition(getWordDefinition(selectedWord)); let active = true; lookupWordDefinition(selectedWord).then((definition) => { if (active) setSelectedDefinition(definition); }); const timer = setTimeout(() => setSelectedWord(null), 5000); return () => { active = false; clearTimeout(timer); }; }, [selectedWord]);
-  const speak = (text: string, speaker: Speaker = "Alex") => { Speech.stop(); const selection = selectVoiceForSpeaker(voices, voiceSpeaker(speaker)); const options: Speech.SpeechOptions = { language: "en-US", rate: getSpeechRate(level === "beginner" ? .9 : level === "advanced" ? 1.05 : 1), onError: () => setReplyError("系统语音暂时不可用，请检查 Android 语音服务设置。") }; if (selection.voice?.identifier) options.voice = selection.voice.identifier; Speech.speak(text, options); };
-  const toggleRecording = async (line = target) => {
-    setRecordingError(null); setEvaluation(null);
-    if (recorderState.isRecording) { try { await recorder.stop(); const uri = recorder.uri; if (!uri) throw new Error("没有找到录音文件，请重新录制。"); setRecordingLine(null); setRecordingMessage("真实录音已保存，正在准备评分"); if (!getApiBaseUrl()) { setRecordingMessage("真实录音已保存；配置后端地址后可提交评分"); return; } setEvaluationLoading(true); const result = await evaluateRecording(uri, line.text); setEvaluation(result); showLineEvaluation(line.id, result); setRecordingMessage("评分完成：点击句子下方评分详情可立即关闭"); } catch (e) { setRecordingError(e instanceof Error ? e.message : "录音处理失败，请重试。"); } finally { setEvaluationLoading(false); } return; }
-    try { const permission = await requestRecordingPermissionsAsync(); if (!permission.granted) throw new Error("需要麦克风权限才能进行真实录音练习。"); await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", allowsRecording: true }); await recorder.prepareToRecordAsync(); recorder.record(); setRecordingLine(line.id); setRecordingMessage("正在录音 · 再次点击停止并评分"); } catch (e) { setRecordingError(e instanceof Error ? e.message : "无法开始录音，请检查麦克风权限。"); }
+
+  // 开始录音
+  const startRecording = async () => {
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (permission.status !== "granted") {
+        alert("Microphone permission is required to record audio.");
+        return;
+      }
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Failed to start recording:", err);
+    }
   };
-  const sendAiRecording = async () => { if (aiRecording) { try { await aiRecorder.stop(); const uri = aiRecorder.uri; setAiRecording(false); if (!uri) throw new Error("没有找到录音文件，请重新录音。"); setAiRecordingUri(uri); setAiRecordingMessage("正在识别中文或英文语音……"); const result = await transcribeRecording(uri, "audio/mp4", "auto"); const translatedText = /[\u3400-\u9fff]/.test(result.text) ? await translateToEnglish(result.text) : result.text; setInput(translatedText); setAiRecordingMessage(/[\u3400-\u9fff]/.test(result.text) ? "中文已转换为英文，请检查后点击发送。" : "已转换到回复框，请检查英文表达后点击发送。"); } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "语音识别失败，请改用文字输入重试。"); } return; } try { const permission = await requestRecordingPermissionsAsync(); if (!permission.granted) throw new Error("需要麦克风权限才能录音。"); await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix", allowsRecording: true }); await aiRecorder.prepareToRecordAsync(); aiRecorder.record(); setAiRecording(true); setAiRecordingMessage("正在录音，再次点击停止并转换到回复框"); } catch (e) { setAiRecordingMessage(e instanceof Error ? e.message : "无法开始录音，请检查麦克风权限。"); } };
-  const sendReply = async () => { const rawMessage = input.trim(); if (!rawMessage || replyLoading || translationLoading) return; setReplyError(null); setTranslationLoading(true); try { const userMessage = /[\u3400-\u9fff]/.test(rawMessage) ? await translateToEnglish(rawMessage) : rawMessage; if (userMessage !== rawMessage) { setInput(userMessage); setAiRecordingMessage("中文已转换为英文，请确认后再次点击发送。"); setTranslationLoading(false); return; } setInput(""); if (!getApiBaseUrl()) { setReplyError("尚未配置后端地址，已保留你的输入；配置后才能请求真实 AI 回复。"); setDialogue((d) => [...d, { role: "user", text: userMessage }]); return; } setReplyLoading(true); const response = await replyToDialogue({ level, scene, history: dialogue, userMessage }); const replyTranslation = response.translation?.trim() || await translateToChinese(response.reply); setDialogue((d) => [...d, { role: "user", text: userMessage, correction: response.correctedEnglish ?? response.correction }, { role: "assistant", text: response.reply, translation: replyTranslation }]); speak(response.reply, "Mia"); } catch (e) { setReplyError(e instanceof Error ? e.message : "AI 对话暂时不可用，请稍后重试。"); } finally { setTranslationLoading(false); setReplyLoading(false); } };
-  const info = selectedWord ? wordInfo(selectedWord) : null;
-  const lastAssistant = [...dialogue].reverse().find((message) => message.role === "assistant");
-  const lastReply = (lastAssistant?.text ?? target.text).trim();
-  
-  return <ScreenContainer><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}><ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    <View style={styles.nav}><View><Text style={styles.brand}>S 英语口语</Text><Text style={styles.kicker}>SpeakWise · 练习助手</Text></View><Text style={styles.wordCount}>{savedWords.length}</Text></View>
-    <Text style={styles.breadcrumb}>英语口语 / {SCENES.find((s) => s.key === scene)?.title}</Text>
-    <View style={styles.selector}><Text style={styles.sectionLabel}>难度级别</Text><View style={styles.row}>{LEVELS.map((item) => <Pressable key={item.key} onPress={() => setLevel(item.key)} style={[styles.level, level === item.key && styles.active]}><Text style={styles.levelTitle}>{item.title}</Text><Text style={styles.levelSub}>{item.subtitle}</Text></Pressable>)}</View><Text style={[styles.sectionLabel, { marginTop: 22 }]}>对话场景</Text><View style={styles.sceneGrid}>{SCENES.map((item) => <Pressable key={item.key} onPress={() => setScene(item.key)} style={[styles.scene, scene === item.key && styles.active]}><Text style={styles.sceneTitle}>{item.title}</Text><Text style={styles.sceneSub}>{item.subtitle}</Text></Pressable>)}</View></View>
-    <Text style={styles.eyebrow}>第 01 课 · {SCENES.find((s) => s.key === scene)?.title}</Text><Text style={styles.heroTitle}>从一句问候开始。</Text><Text style={styles.heroSub}>每句话都能听、能译、能录音评分，点击单词查看发音和释义。</Text>
-    <View style={styles.target}><Text style={styles.cardLabel}>本课目标句</Text><WordSentence text={target.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(target.text); speak(word, target.speaker); }}/><Text style={styles.translation}>{target.translation}</Text><Pressable onPress={() => speak(target.text, target.speaker)} style={styles.primary}><Text style={styles.primaryText}>▶ 播放示范</Text></Pressable></View>
-    <View style={styles.card}><View style={styles.cardHeader}><View><Text style={styles.eyebrow}>情景对话</Text><Text style={styles.sectionTitle}>{SCENES.find((s) => s.key === scene)?.title} · 跟读练习</Text></View><Text style={styles.muted}>{lines.length} 句</Text></View>{lines.map((line) => <View key={line.id} style={styles.line}><View style={styles.lineTop}><Text style={styles.speaker}>{line.speaker}</Text><Text style={styles.role}>{line.speaker === "Alex" ? "练习句" : "对话伙伴"}</Text></View><WordSentence text={line.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(line.text); speak(word, line.speaker); }}/>{translated[line.id] && <Text style={styles.translation}>{line.translation}</Text>}<View style={styles.actions}><Pressable onPress={() => speak(line.text, line.speaker)} style={styles.action}><Text style={styles.actionText}>语音</Text></Pressable><Pressable onPress={() => setTranslated((t) => ({ ...t, [line.id]: !t[line.id] }))} style={styles.action}><Text style={styles.actionText}>{translated[line.id] ? "收起" : "翻译"}</Text></Pressable><Pressable onPress={() => toggleRecording(line)} style={[styles.action, recordingLine === line.id && styles.recording]} accessibilityLabel={recordingLine === line.id ? "停止当前句录音" : "录音"}><Text style={styles.actionText}>{recordingLine === line.id ? "停止并查看评分" : "录音评分"}</Text></Pressable></View>{lineEvaluation?.lineId === line.id && <Pressable onPress={() => setLineEvaluation(null)} style={styles.score} accessibilityLabel="关闭评分详情"><Text style={styles.scoreValue}>{lineEvaluation.result.overallScore}</Text><Text style={styles.helper}>发音 {lineEvaluation.result.pronunciationScore} · 流利度 {lineEvaluation.result.fluencyScore} · 准确度 {lineEvaluation.result.accuracyScore}</Text><Text style={styles.translation}>{lineEvaluation.result.summary}</Text><Text style={styles.muted}>点击关闭 · 6 秒后自动隐藏</Text></Pressable>}</View>)}</View>
-    <View style={[styles.card, styles.aiCard]}><Text style={styles.eyebrow}>AI 口语对话</Text><Text style={styles.sectionTitle}>和 AI 练习真实交流</Text><Text style={styles.helper}>AI 回复文字出现时会同时播放语音；你也可以点击回复中的单词查看释义。</Text><View style={styles.thread}>{dialogue.length === 0 ? <Text style={styles.muted}>正在准备 AI 对话。</Text> : dialogue.map((m, i) => <View key={i} style={[styles.bubble, m.role === "user" ? styles.user : styles.assistant]}><Text style={styles.role}>{m.role === "user" ? "你" : "AI 教练"}</Text><WordSentence text={m.text} onWord={(word) => { setSelectedWord(word); setSelectedExample(m.text); speak(word, "Alex"); }}/>{m.role === "user" && m.correction && <Text style={styles.helper}>纠正：{m.correction}</Text>}{m.role === "assistant" && <Text style={styles.translation}>{m.translation ?? "暂无中文翻译"}</Text>}<View style={styles.actions}><Pressable onPress={() => speak(m.text, m.role === "assistant" ? "Mia" : "Alex")} style={styles.action}><Text style={styles.actionText}>语音</Text></Pressable></View></View>)}</View><View style={styles.inputRow}><TextInput value={input} onChangeText={setInput} onSubmitEditing={sendReply} placeholder="输入英文回复" placeholderTextColor={COLORS.muted} style={styles.input} accessibilityLabel="输入 AI 对话回复"/><Pressable onPress={sendReply} style={styles.send} accessibilityLabel="发送 AI 对话回复">{replyLoading ? <ActivityIndicator color="#fff"/> : <Text style={styles.primaryText}>发送</Text>}</Pressable></View><View style={styles.actions}><Pressable onPress={sendAiRecording} style={[styles.action, aiRecording && styles.recording]} accessibilityLabel={aiRecording ? "停止 AI 录音" : "开始 AI 录音"}><Text style={styles.actionText}>{aiRecording ? "■ 停止录音" : "🎙 录音"}</Text></Pressable><Pressable onPress={handleToggleHints} style={styles.action} accessibilityLabel="回复提示"><Text style={styles.actionText}>{showAiHints ? "💡 收起提示" : "💡 回复提示"}</Text></Pressable></View>{showAiHints && <View style={styles.hints}>{suggestionsLoading ? <ActivityIndicator size="small" color={COLORS.blue} style={{ padding: 10 }} /> : apiSuggestions.length === 0 ? <Text style={styles.helper}>暂无建议，请发送消息后再试。</Text> : apiSuggestions.map((hintText, index) => <Pressable key={index} onPress={() => { setInput(hintText); speak(hintText, "Mia"); }} style={styles.hint}><Text style={styles.helper}>提示 {index + 1}：{hintText}</Text></Pressable>)}</View>}<Text style={styles.helper}>{aiRecordingMessage}</Text>{replyError && <Text style={styles.error}>{replyError}</Text>}</View>
-    <Text style={styles.recordStatus}>{recordingMessage}</Text>{recordingError && <Text style={styles.error}>{recordingError}</Text>}{evaluationLoading && <ActivityIndicator color={COLORS.blue}/>} {evaluation && <View style={styles.score}><Text style={styles.scoreValue}>{evaluation.overallScore}</Text><Text style={styles.translation}>{evaluation.transcript}</Text><Text style={styles.helper}>{evaluation.summary}</Text></View>}
-    <Pressable onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })} style={styles.backTop} accessibilityLabel="返回页面顶部"><Text style={styles.actionText}>↑ 返回顶部</Text></Pressable>
-  </ScrollView></KeyboardAvoidingView>
-  <ModalComponent visible={Boolean(selectedWord)} transparent animationType="fade" onRequestClose={() => setSelectedWord(null)}><Pressable style={styles.modalBackdrop} onPress={() => setSelectedWord(null)}><View style={styles.wordCard}><Text style={styles.wordTitle}>{selectedWord}</Text><Text style={styles.phonetic}>{selectedDefinition?.phonetic ?? info?.phonetic}</Text><Text style={styles.wordMeaning}>{selectedDefinition?.meaning ?? info?.meaning}</Text><View style={styles.row}><Pressable onPress={() => selectedWord && speak(selectedWord)} style={styles.modalButton}><Text style={styles.actionText}>朗读单词</Text></Pressable><Pressable onPress={() => { if (selectedWord) toggleWord(selectedWord, selectedExample || target.text, SCENES.find((s) => s.key === scene)?.title ?? "日常问候"); }} style={styles.modalButton}><Text style={styles.actionText}>{selectedWord && hasWord(selectedWord) ? "已收藏" : "加入生词本"}</Text></Pressable></View><Pressable onPress={() => setSelectedWord(null)}><Text style={styles.muted}>关闭卡片</Text></Pressable></View></Pressable></ModalComponent></ScreenContainer>;
+
+  // 停止录音并提交评分与对话
+  const stopAndProcessRecording = async () => {
+    if (!isRecording) return;
+    try {
+      setIsRecording(false);
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      if (!uri) return;
+
+      setIsLoading(true);
+
+      // 将录音文件读取为 Base64
+      const blobResp = await fetch(uri);
+      const blob = await blobResp.blob();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const res = reader.result as string;
+          const base64 = res.includes(",") ? res.split(",")[1] : res;
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      // 1. 转译录音文本
+      let userText = "";
+      try {
+        const transRes = await transcribeRecording({ audioBase64: base64Data });
+        userText = transRes.text || "Hello! Practice speaking.";
+      } catch {
+        userText = "Hello! Practice speaking.";
+      }
+
+      // 2. 获取发音与语法评分
+      let evalRes: EvaluationResult | undefined;
+      try {
+        evalRes = await evaluateRecording({
+          text: userText,
+          audioBase64: base64Data,
+          level: "beginner",
+          scene: selectedScene.key,
+        });
+      } catch (e) {
+        console.error("Evaluation error:", e);
+      }
+
+      // 3. 构建用户消息（挂载评分）
+      const userMsg: DialogueMessage = {
+        id: Date.now().toString(),
+        role: "user",
+        text: userText,
+        timestamp: Date.now(),
+        evaluation: evalRes,
+      };
+
+      const updatedMessages = [...messages, userMsg];
+      setMessages(updatedMessages);
+
+      // 4. 获取 AI 回复
+      const response = await replyToDialogue({
+        level: "beginner",
+        scene: selectedScene.key,
+        history: updatedMessages.map((m) => ({ role: m.role, text: m.text })),
+        userMessage: userText,
+      });
+
+      const replyText = response?.reply || response?.message || "Great effort! Keep practicing!";
+      const assistantMsg: DialogueMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        text: replyText,
+        timestamp: Date.now(),
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+    } catch (error) {
+      console.error("Error processing recording:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSpeak = (text: string) => {
+    Speech.stop();
+    Speech.speak(text, { language: "en-US" });
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* 头部 */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>SpeakWise AI Coach</Text>
+      </View>
+
+      {/* 场景选择 */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scenesContainer}>
+        {SCENES.map((scene) => (
+          <TouchableOpacity
+            key={scene.key}
+            style={[
+              styles.sceneChip,
+              selectedScene.key === scene.key && styles.sceneChipActive,
+            ]}
+            onPress={() => handleSelectScene(scene)}
+          >
+            <Text
+              style={[
+                styles.sceneChipText,
+                selectedScene.key === scene.key && styles.sceneChipTextActive,
+              ]}
+            >
+              {scene.title}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* 消息列表 */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.chatContainer}
+        contentContainerStyle={styles.chatContent}
+        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+      >
+        {messages.map((msg) => (
+          <View
+            key={msg.id || Math.random().toString()}
+            style={[
+              styles.messageBubble,
+              msg.role === "user" ? styles.userBubble : styles.assistantBubble,
+            ]}
+          >
+            <Text
+              style={[
+                styles.messageText,
+                msg.role === "user" ? styles.userText : styles.assistantText,
+              ]}
+            >
+              {msg.text}
+            </Text>
+
+            {/* 语音评分挂贴（点击可查看详细评分） */}
+            {msg.role === "user" && msg.evaluation && (
+              <TouchableOpacity
+                style={styles.evalBadge}
+                onPress={() => setSelectedEvaluation(msg.evaluation!)}
+              >
+                <Text style={styles.evalBadgeText}>
+                  🎯 得分: {msg.evaluation.score ?? msg.evaluation.overallScore ?? 85} 分 (点击查看分析)
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* AI 消息朗读按键 */}
+            {msg.role === "assistant" && (
+              <TouchableOpacity
+                style={styles.speakButton}
+                onPress={() => handleSpeak(msg.text)}
+              >
+                <Text style={styles.speakButtonText}>🔊 朗读</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))}
+
+        {isLoading && (
+          <View style={[styles.messageBubble, styles.assistantBubble, styles.loadingRow]}>
+            <ActivityIndicator size="small" color="#4F46E5" />
+            <Text style={[styles.assistantText, { marginLeft: 8 }]}>AI 分析与思考中...</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* 快捷推荐回复 */}
+      {suggestions.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsContainer}>
+          {suggestions.map((sug, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={styles.suggestionChip}
+              onPress={() => handleSendMessage(sug)}
+            >
+              <Text style={styles.suggestionText}>{sug}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* 底部打字与录音输入栏 */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.inputContainer}
+      >
+        {/* 录音/停止控制按钮 */}
+        <TouchableOpacity
+          style={[styles.micButton, isRecording && styles.micButtonRecording]}
+          onPress={isRecording ? stopAndProcessRecording : startRecording}
+          disabled={isLoading}
+        >
+          <Text style={styles.micButtonText}>{isRecording ? "⏹️" : "🎤"}</Text>
+        </TouchableOpacity>
+
+        <TextInput
+          style={styles.textInput}
+          placeholder={isRecording ? "正在录音，点击右侧或左侧按钮停止..." : "输入英文或点击麦克风录音..."}
+          placeholderTextColor="#9CA3AF"
+          value={inputText}
+          onChangeText={setInputText}
+          onSubmitEditing={() => handleSendMessage()}
+          returnKeyType="send"
+          editable={!isRecording}
+        />
+
+        <TouchableOpacity
+          style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+          onPress={() => handleSendMessage()}
+          disabled={!inputText.trim() || isLoading}
+        >
+          <Text style={styles.sendButtonText}>Send</Text>
+        </TouchableOpacity>
+      </KeyboardAvoidingView>
+
+      {/* 评分分析 Modal 弹窗 */}
+      <Modal
+        visible={!!selectedEvaluation}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedEvaluation(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🎯 发音与表达评估分析</Text>
+
+            <View style={styles.scoreContainer}>
+              <Text style={styles.scoreNumber}>
+                {selectedEvaluation?.score ?? selectedEvaluation?.overallScore ?? 85}
+              </Text>
+              <Text style={styles.scoreLabel}>综合发音得分</Text>
+            </View>
+
+            {selectedEvaluation?.feedback && (
+              <Text style={styles.feedbackText}>{selectedEvaluation.feedback}</Text>
+            )}
+
+            {selectedEvaluation?.pronunciation && selectedEvaluation.pronunciation.length > 0 && (
+              <View style={styles.evalDetailBox}>
+                <Text style={styles.evalDetailTitle}>🗣️ 发音建议：</Text>
+                {selectedEvaluation.pronunciation.map((item, idx) => (
+                  <Text key={idx} style={styles.evalDetailItem}>• {item}</Text>
+                ))}
+              </View>
+            )}
+
+            {selectedEvaluation?.grammar && selectedEvaluation.grammar.length > 0 && (
+              <View style={styles.evalDetailBox}>
+                <Text style={styles.evalDetailTitle}>📝 语法优化：</Text>
+                {selectedEvaluation.grammar.map((item, idx) => (
+                  <Text key={idx} style={styles.evalDetailItem}>• {item}</Text>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setSelectedEvaluation(null)}
+            >
+              <Text style={styles.closeButtonText}>关闭</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
 }
-const styles = StyleSheet.create({ flex: { flex: 1 }, content: { padding: 18, paddingBottom: 40, gap: 16, backgroundColor: COLORS.bg }, nav: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, brand: { color: COLORS.text, fontSize: 23, fontWeight: "900" }, kicker: { color: COLORS.muted, fontSize: 11, marginTop: 3 }, wordCount: { color: COLORS.text, backgroundColor: COLORS.blueSoft, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, fontWeight: "900" }, breadcrumb: { color: COLORS.muted, fontSize: 14, marginTop: 18 }, selector: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, padding: 14, backgroundColor: COLORS.panel }, sectionLabel: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, row: { flexDirection: "row", gap: 10 }, level: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 12, marginTop: 12 }, active: { backgroundColor: COLORS.blue, borderColor: "#78A1FF" }, levelTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" }, levelSub: { color: COLORS.muted, marginTop: 4 }, sceneGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, scene: { width: "31%", minHeight: 86, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 10, marginTop: 10 }, sceneTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14 }, sceneSub: { color: COLORS.muted, fontSize: 11, lineHeight: 16, marginTop: 6 }, eyebrow: { color: "#7EA5FF", fontSize: 12, fontWeight: "900", marginTop: 4 }, heroTitle: { color: COLORS.text, fontSize: 32, fontWeight: "900", marginTop: 2 }, heroSub: { color: COLORS.muted, fontSize: 14, lineHeight: 21 }, target: { backgroundColor: "#162A57", borderRadius: 18, padding: 18, borderWidth: 1, borderColor: "#426FD4" }, card: { backgroundColor: COLORS.panel, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, padding: 16 }, cardLabel: { color: "#A9C1FF", fontWeight: "900" }, sentence: { color: COLORS.text, fontSize: 19, lineHeight: 29, fontWeight: "700", marginTop: 9 }, word: { color: COLORS.text }, translation: { color: COLORS.muted, fontSize: 13, lineHeight: 19, marginTop: 7 }, primary: { backgroundColor: COLORS.blue, alignSelf: "flex-start", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginTop: 12 }, primaryText: { color: "#fff", fontWeight: "900" }, cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, sectionTitle: { color: COLORS.text, fontSize: 19, fontWeight: "900", marginTop: 4 }, muted: { color: COLORS.muted, fontSize: 12 }, line: { borderTopWidth: 1, borderTopColor: "#292C33", paddingVertical: 15 }, lineTop: { flexDirection: "row", gap: 8, alignItems: "center" }, speaker: { color: "#8DB0FF", fontWeight: "900" }, role: { color: COLORS.muted, fontSize: 11 }, actions: { flexDirection: "row", gap: 8, marginTop: 11 }, action: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 7 }, actionText: { color: COLORS.text, fontSize: 11, fontWeight: "800" }, recording: { backgroundColor: "#8B3D4A", borderColor: "#D46B7A" }, helper: { color: COLORS.muted, fontSize: 12, lineHeight: 18, marginTop: 7 }, thread: { gap: 8, marginTop: 14 }, aiCard: { minHeight: 430 }, hints: { gap: 6, marginTop: 8 }, hint: { borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 9 }, bubble: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border }, user: { backgroundColor: "#17213A" }, assistant: { backgroundColor: "#191B20" }, inputRow: { flexDirection: "row", gap: 8, marginTop: 14 }, input: { flex: 1, color: COLORS.text, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingHorizontal: 12, minHeight: 44 }, send: { backgroundColor: COLORS.blue, borderRadius: 10, paddingHorizontal: 14, justifyContent: "center" }, recordStatus: { color: COLORS.muted, textAlign: "center" }, error: { color: "#FF9CA9", fontSize: 12, marginTop: 8 }, score: { backgroundColor: "#182C25", padding: 14, borderRadius: 14 }, scoreValue: { color: "#73E2A8", fontSize: 38, fontWeight: "900" }, backTop: { alignSelf: "center", borderWidth: 1, borderColor: COLORS.border, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 }, modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,.72)", justifyContent: "flex-end" }, wordCard: { backgroundColor: COLORS.panel2, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 12, borderWidth: 1, borderColor: COLORS.border }, wordTitle: { color: COLORS.text, fontSize: 28, fontWeight: "900" }, phonetic: { color: "#8DB0FF", fontSize: 18 }, wordMeaning: { color: COLORS.text, fontSize: 16 }, modalButton: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, alignItems: "center", padding: 11 } });
 
-
-
-
-
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F8F9FA",
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111827",
+  },
+  scenesContainer: {
+    maxHeight: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  sceneChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    marginRight: 8,
+    height: 36,
+    justifyContent: "center",
+  },
+  sceneChipActive: {
+    backgroundColor: "#4F46E5",
+  },
+  sceneChipText: {
+    fontSize: 14,
+    color: "#4B5563",
+    fontWeight: "500",
+  },
+  sceneChipTextActive: {
+    color: "#FFFFFF",
+  },
+  chatContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  chatContent: {
+    paddingBottom: 20,
+  },
+  messageBubble: {
+    maxWidth: "85%",
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  userBubble: {
+    alignSelf: "flex-end",
+    backgroundColor: "#4F46E5",
+  },
+  assistantBubble: {
+    alignSelf: "flex-start",
+    backgroundColor: "#E5E7EB",
+  },
+  messageText: {
+    fontSize: 15,
+  },
+  userText: {
+    color: "#FFFFFF",
+  },
+  assistantText: {
+    color: "#1F2937",
+  },
+  evalBadge: {
+    marginTop: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  evalBadgeText: {
+    fontSize: 12,
+    color: "#FEF08A",
+    fontWeight: "600",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  speakButton: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+  },
+  speakButtonText: {
+    fontSize: 12,
+    color: "#4F46E5",
+    fontWeight: "600",
+  },
+  suggestionsContainer: {
+    maxHeight: 50,
+    paddingHorizontal: 16,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+  suggestionChip: {
+    backgroundColor: "#EEF2FF",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    justifyContent: "center",
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: "#C7D2FE",
+  },
+  suggestionText: {
+    fontSize: 13,
+    color: "#4338CA",
+  },
+  inputContainer: {
+    flexDirection: "row",
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    alignItems: "center",
+  },
+  micButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F3F4F6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  micButtonRecording: {
+    backgroundColor: "#FEE2E2",
+  },
+  micButtonText: {
+    fontSize: 18,
+  },
+  textInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    backgroundColor: "#F9FAFB",
+    color: "#1F2937",
+    fontSize: 14,
+  },
+  sendButton: {
+    marginLeft: 8,
+    backgroundColor: "#4F46E5",
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sendButtonDisabled: {
+    backgroundColor: "#9CA3AF",
+  },
+  sendButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    width: "100%",
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 16,
+  },
+  scoreContainer: {
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  scoreNumber: {
+    fontSize: 48,
+    fontWeight: "bold",
+    color: "#4F46E5",
+  },
+  scoreLabel: {
+    fontSize: 14,
+    color: "#6B7280",
+  },
+  feedbackText: {
+    fontSize: 14,
+    color: "#374151",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  evalDetailBox: {
+    width: "100%",
+    backgroundColor: "#F9FAFB",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  evalDetailTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1F2937",
+    marginBottom: 6,
+  },
+  evalDetailItem: {
+    fontSize: 13,
+    color: "#4B5563",
+    marginTop: 2,
+  },
+  closeButton: {
+    marginTop: 8,
+    backgroundColor: "#4F46E5",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+  },
+  closeButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+});
