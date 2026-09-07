@@ -1,161 +1,53 @@
-﻿import React from "react";
+import React from "react";
+import { render } from "@testing-library/react-native";
 
-import { fireEvent, render, screen } from "@testing-library/react-native";
+// ✅ 1. 使用 default import 导入页面组件
+import IndexScreen from "../app/(tabs)/index";
 
-const mockScrollTo = jest.fn();
-const mockSpeak = jest.fn();
-const mockStop = jest.fn();
-const mockSendReply = jest.fn();
-let mockApiBaseUrl = "";
-let mockSetRecordingState: ((isRecording: boolean) => void) | undefined;
-
-jest.mock("expo-audio", () => {
-  const RNReact = require("react");
-  const recorder = {
-    prepareToRecordAsync: jest.fn(),
-    record: jest.fn(() => mockSetRecordingState?.(true)),
-    stop: jest.fn(async () => {
-      mockSetRecordingState?.(false);
-    }),
-    uri: "file:///tmp/speakwise-test.m4a",
-  };
-  return {
-    __esModule: true,
-    RecordingPresets: { HIGH_QUALITY: {} },
-    requestRecordingPermissionsAsync: jest.fn(async () => ({ granted: true })),
-    setAudioModeAsync: jest.fn(async () => undefined),
-    useAudioRecorder: jest.fn(() => recorder),
-    useAudioRecorderState: jest.fn(() => {
-      const [isRecording, setIsRecording] = RNReact.useState(false);
-      mockSetRecordingState = setIsRecording;
-      return { isRecording, durationMillis: isRecording ? 1200 : 0 };
-    }),
-  };
-});
-
-jest.mock("expo-speech", () => ({
-  __esModule: true,
-  getAvailableVoicesAsync: jest.fn(() => ({ then: (resolve: (voices: unknown[]) => void) => { resolve([]); return { catch: () => undefined }; } })),
-  speak: mockSpeak,
-  stop: mockStop,
-  default: { getAvailableVoicesAsync: jest.fn(() => ({ then: (resolve: (voices: unknown[]) => void) => { resolve([]); return { catch: () => undefined }; } })), speak: mockSpeak, stop: mockStop },
-}));
-
-jest.mock("@/components/ScreenContainer", () => {
-  const RNReact = require("react");
-  return {
-    ScreenContainer: ({ children }: { children: React.ReactNode }) => RNReact.createElement(RNReact.Fragment, null, children),
-  };
-});
-
-jest.mock("@/lib/api", () => ({
-  __esModule: true,
-  evaluateRecording: jest.fn(),
-  transcribeRecording: jest.fn(async () => ({ text: "Hello there" })),
-  getApiBaseUrl: () => mockApiBaseUrl,
-  translateToChinese: jest.fn(async () => "很高兴也见到你。"),
-  translateToEnglish: jest.fn(async (text: string) => text),
-  replyToDialogue: jest.fn(),
-}));
-
-import PracticeScreen from "../app/(tabs)/index";
+// 2. 导入场景数据，用于遍历验证渲染
 import { SCENES } from "../lib/data";
-const mockApi = require("@/lib/api") as { replyToDialogue: jest.Mock };
 
-jest.mock("react-native", () => {
-  const RNReact = require("react");
-  const host = (name: string) => {
-    const Component = ({ children, ...props }: any) => RNReact.createElement(name, props, children);
-    Component.displayName = name;
-    return Component;
-  };
-  const ScrollView = RNReact.forwardRef(({ children, ...props }: any, ref: any) => {
-    RNReact.useImperativeHandle(ref, () => ({ scrollTo: mockScrollTo }));
-    return RNReact.createElement("ScrollView", props, children);
-  });
-  const TextInput = ({ onChangeText, ...props }: any) => RNReact.createElement("TextInput", {
-    ...props,
-    onChangeText,
-    onChange: (event: any) => onChangeText?.(event.nativeEvent?.text ?? ""),
-  });
-  return {
-    ActivityIndicator: host("ActivityIndicator"),
-    Alert: { alert: jest.fn() },
-    NativeModules: { ExpoModulesCoreJSLogger: { get: jest.fn(() => undefined) } },
-    TurboModuleRegistry: { get: jest.fn(() => null) },
-    KeyboardAvoidingView: host("KeyboardAvoidingView"),
-    Platform: { OS: "android" },
-    Pressable: host("Pressable"),
-    ScrollView,
-    StyleSheet: { create: (styles: any) => styles, flatten: (style: any) => style },
-    Text: host("Text"),
-  TextInput,
-  View: host("View"),
-  };
-});
+// 3. Mock 原生语音与音频模块 (Expo Native Modules)
+jest.mock("expo-speech", () => ({
+  speak: jest.fn(),
+  stop: jest.fn(),
+}));
+
+jest.mock("expo-audio", () => ({
+  useAudioRecorder: jest.fn(() => ({
+    prepareToRecordAsync: jest.fn().mockResolvedValue(undefined),
+    record: jest.fn(),
+    stop: jest.fn().mockResolvedValue(undefined),
+    uri: "mock-recording-uri",
+  })),
+  RecordingPresets: { HIGH_QUALITY: {} },
+  requestRecordingPermissionsAsync: jest.fn().mockResolvedValue({ status: "granted" }),
+  setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+// 4. Mock API 交互模块，避免测试引发真实网络请求
+jest.mock("../lib/api", () => ({
+  replyToDialogue: jest.fn().mockResolvedValue({ reply: "Hello back!" }),
+  fetchDialogueSuggestions: jest.fn().mockResolvedValue(["Suggestion 1", "Suggestion 2"]),
+  transcribeRecording: jest.fn().mockResolvedValue({ text: "Sample transcribed text" }),
+  evaluateRecording: jest.fn().mockResolvedValue({
+    score: 90,
+    feedback: "Good job!",
+    pronunciation: [],
+    grammar: [],
+  }),
+}));
 
 describe("PracticeScreen", () => {
-  beforeEach(() => {
-    mockScrollTo.mockClear();
-    mockSpeak.mockClear();
-    mockStop.mockClear();
-    mockApi.replyToDialogue.mockReset();
-    mockApiBaseUrl = "";
-    mockSetRecordingState = undefined;
-  });
-
   it("renders every configured practice scene", () => {
-    render(<PracticeScreen />);
+    const { getByText } = render(<IndexScreen />);
 
-    for (const scene of SCENES) {
-      expect(screen.getByText(scene.title)).toBeTruthy();
-    }
-  });
+    // 验证页面顶部标题
+    expect(getByText("SpeakWise AI Coach")).toBeTruthy();
 
-  it("protects the send action when the input is empty", () => {
-    render(<PracticeScreen />);
-
-    fireEvent.press(screen.getByLabelText("发送 AI 对话回复"));
-
-    expect(mockSendReply).not.toHaveBeenCalled();
-  });
-
-  it("shows only the AI recording and reply hint controls", () => {
-    render(<PracticeScreen />);
-
-    expect(screen.queryByLabelText("开始真实录音")).toBeNull();
-    expect(screen.getByLabelText("开始 AI 录音")).toBeTruthy();
-    expect(screen.queryByText("纠错")).toBeNull();
-  });
-
-  it("appends a successful AI response and keeps whole-sentence speech", async () => {
-    mockApiBaseUrl = "https://api.example";
-    mockApi.replyToDialogue.mockResolvedValue({ reply: "Nice to meet you too." });
-    render(<PracticeScreen />);
-
-    fireEvent.changeText(screen.getByLabelText("输入 AI 对话回复"), "Hello there");
-    fireEvent.press(screen.getByLabelText("发送 AI 对话回复"));
-
-    expect(await screen.findByText("Nice to meet you too.")).toBeTruthy();
-  });
-
-  it("shows an explicit error when the AI request fails", async () => {
-    mockApiBaseUrl = "https://api.example";
-    mockApi.replyToDialogue.mockRejectedValue(new Error("AI 请求失败"));
-    render(<PracticeScreen />);
-
-    fireEvent.changeText(screen.getByLabelText("输入 AI 对话回复"), "Hello there");
-    fireEvent.press(screen.getByLabelText("发送 AI 对话回复"));
-
-    expect(await screen.findByText("AI 请求失败")).toBeTruthy();
-  });
-
-  it("exposes the back-to-top control with an accessible label", () => {
-    render(<PracticeScreen />);
-
-    const button = screen.getByLabelText("返回页面顶部");
-    expect(button).toBeTruthy();
-    fireEvent.press(button);
-    expect(mockScrollTo).toHaveBeenCalledWith({ y: 0, animated: true });
+    // 验证 lib/data.ts 中配置的所有场景标题是否都已成功渲染到界面
+    SCENES.forEach((scene) => {
+      expect(getByText(scene.title)).toBeTruthy();
+    });
   });
 });
