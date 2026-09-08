@@ -1,34 +1,46 @@
-import * as NativeSplash from "expo-splash-screen";
-import { DarkTheme, Stack, ThemeProvider } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { StyleSheet, View } from "react-native";
-import { useEffect } from "react";
-import "react-native-reanimated";
-import { WordbookProvider } from "@/lib/wordbook";
-export { ErrorBoundary } from "expo-router";
+﻿import { useEffect, useState } from 'react';
+import { View, Image, StyleSheet } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { Stack } from 'expo-router';
 
-NativeSplash.preventAutoHideAsync().catch(() => undefined);
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [appReady, setAppReady] = useState(false);
+
   useEffect(() => {
-    NativeSplash.hideAsync().catch(() => undefined);
+    async function prepare() {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setAppReady(true);
+        await SplashScreen.hideAsync();
+      }
+    }
+
+    prepare();
   }, []);
 
-  return (
-    <WordbookProvider>
-      <SafeAreaProvider>
-        <ThemeProvider value={DarkTheme}>
-          <View style={styles.root}>
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-            <StatusBar style="light" />
-          </View>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </WordbookProvider>
-  );
+  if (!appReady) {
+    return (
+      <View style={styles.container}>
+        <Image
+          source={require('../assets/images/splash-icon.png')}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+        />
+      </View>
+    );
+  }
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 } });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+});
