@@ -35,6 +35,9 @@ jest.mock("expo-audio", () => ({
 jest.mock("../lib/api", () => ({
   replyToDialogue: jest.fn().mockResolvedValue({ reply: "Hello back!" }),
   fetchDialogueSuggestions: jest.fn().mockResolvedValue(["Suggestion 1", "Suggestion 2"]),
+  translateText: jest.fn().mockImplementation(({ text }: { text: string }) =>
+    Promise.resolve({ text: `中文${text}` }),
+  ),
   transcribeRecording: jest.fn().mockResolvedValue({ text: "Sample transcribed text" }),
   evaluateRecording: jest.fn().mockResolvedValue({
     score: 90,
@@ -63,5 +66,23 @@ describe("PracticeScreen", () => {
 
     fireEvent.press(getByLabelText("显示回复提示"));
     expect(getByText("Suggestion 1")).toBeTruthy();
+    expect(getByText("中文Suggestion 1")).toBeTruthy();
+    expect(getByText("中文Suggestion 2")).toBeTruthy();
+  });
+
+  it("automatically reads a successful AI reply aloud", async () => {
+    const { getByPlaceholderText, getByText } = render(<IndexScreen />);
+
+    const input = getByPlaceholderText("输入英文或点击麦克风录音...");
+    fireEvent.changeText(input, "Hello");
+    fireEvent.press(getByText("Send"));
+
+    await waitFor(() => {
+      expect(getByText("Hello back!")).toBeTruthy();
+      expect(require("expo-speech").speak).toHaveBeenCalledWith(
+        "Hello back!",
+        expect.objectContaining({ language: "en-US" }),
+      );
+    });
   });
 });

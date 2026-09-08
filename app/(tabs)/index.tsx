@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
 import * as Speech from "expo-speech";
 import {
@@ -30,6 +31,10 @@ import {
 } from "../../lib/api";
 
 type Scene = (typeof SCENES)[number];
+type SuggestionCard = {
+  english: string;
+  chinese: string;
+};
 
 function WordSentence({ text, onWord }: { text: string; onWord: (word: string) => void }) {
   return (
@@ -60,17 +65,20 @@ export default function IndexScreen() {
   const [inputText, setInputText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionCard[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionTranslations, setSuggestionTranslations] = useState<Record<number, string>>({});
   const [messageTranslations, setMessageTranslations] = useState<Record<string, string>>({});
   const [translatingId, setTranslatingId] = useState<string | number | null>(null);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedDefinition, setSelectedDefinition] = useState<WordDefinition | null>(null);
   const [selectedExample, setSelectedExample] = useState("");
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const scrollViewRef = useRef<ScrollView>(null);
+  const autoPlayedMessageIds = useRef(new Set<string>());
+  const { width: screenWidth } = useWindowDimensions();
 
   useEffect(() => {
     if (!selectedWord) {
@@ -107,7 +115,7 @@ export default function IndexScreen() {
     setMessages([initialMsg]);
     setSuggestions([]);
     setShowSuggestions(false);
-    setSuggestionTranslations({});
+    setActiveSuggestionIndex(0);
   };
 
   // 自动获取快捷建议
@@ -122,8 +130,34 @@ export default function IndexScreen() {
       })
         .then((sugs) => {
           if (Array.isArray(sugs)) {
-            setSuggestions(sugs.slice(0, 2));
-            setSuggestionTranslations({});
+            const cards = sugs.slice(0, 2).map((suggestion) => ({
+              english: typeof suggestion === "string" ? suggestion : String(suggestion),
+              chinese: "中文翻译中...",
+            }));
+            setSuggestions(cards);
+            setActiveSuggestionIndex(0);
+            Promise.all(
+              cards.map(async (card) => {
+                try {
+                  const result = await translateText({
+                    text: card.english,
+                    sourceLanguage: "en",
+                    targetLanguage: "zh",
+                  });
+                  return result.text;
+                } catch (error) {
+                  console.error("Failed to translate suggestion:", error);
+                  return "暂无中文翻译";
+                }
+              }),
+            ).then((translations) => {
+              setSuggestions((current) =>
+                current.map((card, index) => ({
+                  ...card,
+                  chinese: translations[index] || "暂无中文翻译",
+                })),
+              );
+            });
           }
         })
         .catch(() => setSuggestions([]));
@@ -183,6 +217,7 @@ export default function IndexScreen() {
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+      speakAssistantReply(assistantMsg.id!, assistantMsg.text);
     } catch (error) {
       console.error("Failed to send dialogue message:", error);
       const errorMsg: DialogueMessage = {
@@ -269,9 +304,30 @@ export default function IndexScreen() {
     }
   };
 
-  const handleSpeak = (text: string) => {
-    Speech.stop();
-    Speech.speak(text, { language: "en-US" });
+  const speakAssistantReply = (messageId: string, text: string) => {
+    if (!text.trim() || autoPlayedMessageIds.current.has(messageId)) return;
+    autoPlayedMessageIds.current.add(messageId);
+    setSpeakingMessageId(messageId);
+    try {
+      Speech.stop();
+      Speech.speak(text, {
+        language: "en-US",
+        onDone: () => setSpeakingMessageId((current) => (current === messageId ? null : current)),
+        onStopped: () => setSpeakingMessageId((current) => (current === messageId ? null : current)),
+        onError: (error) => {
+          console.error("Failed to play AI reply:", error);
+          setSpeakingMessageId((current) => (current === messageId ? null : current));
+        },
+      });
+    } catch (error) {
+      console.error("Failed to start AI reply playback:", error);
+      setSpeakingMessageId(null);
+    }
+  };
+
+  const handleSpeak = (messageId: string, text: string) => {
+    autoPlayedMessageIds.current.delete(messageId);
+    speakAssistantReply(messageId, text);
   };
 
   const handleTranslateMessage = async (messageId: string, text: string) => {
@@ -289,26 +345,6 @@ export default function IndexScreen() {
       setMessageTranslations((current) => ({ ...current, [messageId]: result.text }));
     } catch (error) {
       console.error("Failed to translate AI reply:", error);
-    } finally {
-      setTranslatingId(null);
-    }
-  };
-
-  const handleTranslateSuggestion = async (index: number, text: string) => {
-    if (suggestionTranslations[index]) {
-      setSuggestionTranslations((current) => {
-        const next = { ...current };
-        delete next[index];
-        return next;
-      });
-      return;
-    }
-    setTranslatingId(index);
-    try {
-      const result = await translateText({ text, sourceLanguage: "en", targetLanguage: "zh" });
-      setSuggestionTranslations((current) => ({ ...current, [index]: result.text }));
-    } catch (error) {
-      console.error("Failed to translate suggestion:", error);
     } finally {
       setTranslatingId(null);
     }
@@ -367,8 +403,10 @@ export default function IndexScreen() {
             {/* AI 消息朗读按键 */}
             {msg.role === "assistant" && (
               <View style={styles.messageActions}>
-                <TouchableOpacity style={styles.actionButton} onPress={() => handleSpeak(msg.text)}>
-                  <Text style={styles.actionButtonText}>🔊 朗读</Text>
+                <TouchableOpacity style={styles.actionButton} onPress={() => handleSpeak(msg.id || String(msg.timestamp), msg.text)}>
+                <Text style={styles.actionButtonText}>
+                  {speakingMessageId === (msg.id || String(msg.timestamp)) ? "⏸ 播放中" : "🔊 朗读"}
+                </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.actionButton}
@@ -401,20 +439,35 @@ export default function IndexScreen() {
 
       {/* 回复提示默认隐藏，点击灯泡后显示两条 */}
       {showSuggestions && suggestions.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionsContainer}>
-          {suggestions.map((sug, idx) => (
-            <View key={idx} style={styles.suggestionCard}>
-              <TouchableOpacity style={styles.suggestionChip} onPress={() => handleSendMessage(sug)}>
-                <Text style={styles.suggestionText}>{sug}</Text>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.suggestionsContainer}
+          contentContainerStyle={styles.suggestionsContent}
+          onMomentumScrollEnd={(event) => {
+            const index = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+            setActiveSuggestionIndex(Math.min(index, suggestions.length - 1));
+          }}
+          accessibilityLabel="回复提示分页"
+        >
+          {suggestions.map((suggestion, idx) => (
+            <View
+              key={`${suggestion.english}-${idx}`}
+              style={[
+                styles.suggestionCard,
+                { width: screenWidth - 32 },
+                activeSuggestionIndex === idx && styles.suggestionCardActive,
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.suggestionChip}
+                onPress={() => handleSendMessage(suggestion.english)}
+                accessibilityLabel={`发送提示${idx + 1}`}
+              >
+                <Text style={styles.suggestionText}>{suggestion.english}</Text>
+                <Text style={styles.suggestionTranslation}>{suggestion.chinese}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleTranslateSuggestion(idx, sug)}>
-                <Text style={styles.suggestionTranslationButton}>
-                  {translatingId === idx ? "翻译中..." : suggestionTranslations[idx] ? "收起中文" : "中文翻译"}
-                </Text>
-              </TouchableOpacity>
-              {suggestionTranslations[idx] && (
-                <Text style={styles.suggestionTranslation}>{suggestionTranslations[idx]}</Text>
-              )}
             </View>
           ))}
         </ScrollView>
@@ -495,12 +548,13 @@ const styles = StyleSheet.create({
   actionButton: { backgroundColor: "#162A57", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   actionButtonText: { fontSize: 12, color: "#9DB9FF", fontWeight: "600" },
   translationText: { color: "#9AA2B4", fontSize: 13, lineHeight: 20, marginTop: 8 },
-  suggestionsContainer: { maxHeight: 100, paddingHorizontal: 16, backgroundColor: "#111317", borderTopWidth: 1, borderTopColor: "#292C33" },
-  suggestionCard: { marginRight: 10, marginVertical: 7, alignItems: "flex-start" },
-  suggestionChip: { backgroundColor: "#162A57", borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "#3A5FAF" },
-  suggestionText: { fontSize: 13, color: "#F2F3F5", maxWidth: 180 },
-  suggestionTranslationButton: { color: "#9DB9FF", fontSize: 11, fontWeight: "700", marginTop: 2 },
-  suggestionTranslation: { color: "#9AA2B4", fontSize: 11, maxWidth: 180, marginTop: 2 },
+  suggestionsContainer: { maxHeight: 130, backgroundColor: "#111317", borderTopWidth: 1, borderTopColor: "#292C33" },
+  suggestionsContent: { paddingHorizontal: 16 },
+  suggestionCard: { justifyContent: "center", paddingVertical: 8, paddingHorizontal: 4 },
+  suggestionCardActive: { transform: [{ scale: 1.02 }] },
+  suggestionChip: { backgroundColor: "#162A57", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: "#3A5FAF" },
+  suggestionText: { fontSize: 15, lineHeight: 22, color: "#F2F3F5", fontWeight: "600" },
+  suggestionTranslation: { color: "#B8C7E8", fontSize: 14, lineHeight: 21, marginTop: 4 },
   inputContainer: { flexDirection: "row", padding: 12, backgroundColor: "#111317", borderTopWidth: 1, borderTopColor: "#292C33", alignItems: "center" },
   micButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#162A57", justifyContent: "center", alignItems: "center", marginRight: 8 },
   micButtonRecording: { backgroundColor: "#5B2632" },
