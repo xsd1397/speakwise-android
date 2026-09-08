@@ -28,7 +28,7 @@ export default function RootLayout() {
       <View style={styles.container}>
         <Image
           source={require('../assets/images/splash-icon.png')}
-          style={StyleSheet.absoluteFill}
+          style={StyleSheet.absoluteFillObject}
           resizeMode="cover"
         />
       </View>
