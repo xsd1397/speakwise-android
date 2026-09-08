@@ -11,6 +11,7 @@ const icons = {
 export default function TabLayout() {
   return (
     <Tabs
+      initialRouteName="listening"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#8DB0FF",

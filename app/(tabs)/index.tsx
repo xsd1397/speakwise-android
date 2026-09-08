@@ -245,10 +245,19 @@ export default function IndexScreen() {
       // 1. 转译录音文本
       let userText = "";
       try {
-        const transRes = await transcribeRecording({ audioBase64: base64Data });
+        const transRes = await transcribeRecording({ audioBase64: base64Data, language: "auto" });
         userText = transRes.text || "Hello! Practice speaking.";
-      } catch {
-        userText = "Hello! Practice speaking.";
+        if (/[\u3400-\u9FFF]/.test(userText)) {
+          const english = await translateText({
+            text: userText,
+            sourceLanguage: "zh",
+            targetLanguage: "en",
+          });
+          userText = english.text;
+        }
+      } catch (error) {
+        console.error("Failed to transcribe or translate recording:", error);
+        userText = userText || "Hello! Practice speaking.";
       }
 
       // 2. 仅将录音转写结果放回输入框，由用户确认后点击 SEND。

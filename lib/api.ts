@@ -90,31 +90,53 @@ export async function translateText(params: {
   sourceLanguage?: "en" | "zh";
 }): Promise<TranslationResult> {
   const baseUrl = getApiBaseUrl().replace(/\/$/, "");
-  const response = await fetch(`${baseUrl}/api/translate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: params.text,
-      sourceLanguage: params.sourceLanguage,
-      targetLanguage: params.targetLanguage,
-      language: params.targetLanguage,
-    }),
-  });
+  const input = {
+    text: params.text,
+    sourceLanguage: params.sourceLanguage,
+    targetLanguage: params.targetLanguage,
+    language: params.targetLanguage,
+  };
+
+  try {
+    const result = await callTrpcMutationWithFallbacks<any>(
+      ["dialogue.translate", "voice.translate", "translation.translate"],
+      input,
+    );
+    const text =
+      result?.text ??
+      result?.translation ??
+      result?.translatedText ??
+      result?.translated ??
+      result?.result;
+
+    if (typeof text === "string" && text.trim()) {
+      return {
+        text: text.trim(),
+        sourceLanguage: params.sourceLanguage,
+        targetLanguage: params.targetLanguage,
+      };
+    }
+  } catch {
+    // Use the public translation fallback below when this deployment has no translation procedure.
+  }
+
+  const source = params.sourceLanguage === "zh" ? "zh-CN" : "en";
+  const target = params.targetLanguage === "zh" ? "zh-CN" : "en";
+  const response = await fetch(
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(params.text)}&langpair=${source}|${target}`,
+  );
 
   if (!response.ok) {
     throw new Error(`Translation failed: ${response.status}`);
   }
 
-  const data = await response.json();
-  const result = data?.result?.data?.json ?? data?.data ?? data;
-  const text =
-    result?.text ??
-    result?.translation ??
-    result?.translatedText ??
-    result?.translated ??
-    result?.result;
+  const data = await response.json() as {
+    responseData?: { translatedText?: string };
+    responseStatus?: number;
+  };
+  const text = data.responseData?.translatedText?.trim();
 
-  if (typeof text !== "string" || !text.trim()) {
+  if (!text || data.responseStatus === 429) {
     throw new Error("Translation response did not contain translated text");
   }
 
@@ -212,7 +234,7 @@ export async function transcribeRecording(params: {
       audioBase64: params.audioBase64,
       mimeType: params.mimeType || "audio/m4a",
       targetSentence: params.targetSentence,
-      language: params.language || "en",
+      language: params.language || "auto",
     });
 
     if (res && typeof res === "object") {
