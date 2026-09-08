@@ -36,6 +36,12 @@ export type PreflightResult = {
   [key: string]: any;
 };
 
+export type TranslationResult = {
+  text: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+};
+
 export const getApiBaseUrl = (): string => {
   return process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_API_URL || STATIC_API_BASE_URL;
 };
@@ -76,6 +82,47 @@ async function callTrpcMutationWithFallbacks<T>(paths: string[], inputData: Reco
   }
 
   throw lastError instanceof Error ? lastError : new Error("tRPC call failed");
+}
+
+export async function translateText(params: {
+  text: string;
+  targetLanguage: "en" | "zh";
+  sourceLanguage?: "en" | "zh";
+}): Promise<TranslationResult> {
+  const baseUrl = getApiBaseUrl().replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/api/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: params.text,
+      sourceLanguage: params.sourceLanguage,
+      targetLanguage: params.targetLanguage,
+      language: params.targetLanguage,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Translation failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const result = data?.result?.data?.json ?? data?.data ?? data;
+  const text =
+    result?.text ??
+    result?.translation ??
+    result?.translatedText ??
+    result?.translated ??
+    result?.result;
+
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Translation response did not contain translated text");
+  }
+
+  return {
+    text: text.trim(),
+    sourceLanguage: params.sourceLanguage,
+    targetLanguage: params.targetLanguage,
+  };
 }
 
 function normalizeEvaluationResult(raw: any): EvaluationResult {

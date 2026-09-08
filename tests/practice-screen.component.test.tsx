@@ -1,5 +1,5 @@
 import React from "react";
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 // 使用 default import 匹配 export default IndexScreen
 import IndexScreen from "../app/(tabs)/index";
@@ -46,7 +46,7 @@ jest.mock("../lib/api", () => ({
 
 describe("PracticeScreen", () => {
   it("renders every configured practice scene", async () => {
-    const { getByText } = render(<IndexScreen />);
+    const { getByText, getByLabelText } = render(<IndexScreen />);
 
     // 验证页面主标题渲染
     expect(getByText("SpeakWise AI Coach")).toBeTruthy();
@@ -58,7 +58,10 @@ describe("PracticeScreen", () => {
 
     // ✅ 等待 useEffect 中的异步 fetchDialogueSuggestions 状态更新完成，消除 act 警告
     await waitFor(() => {
-      expect(getByText("Suggestion 1")).toBeTruthy();
+      expect(getByLabelText("显示回复提示")).toBeTruthy();
     });
+
+    fireEvent.press(getByLabelText("显示回复提示"));
+    expect(getByText("Suggestion 1")).toBeTruthy();
   });
 });
