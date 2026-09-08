@@ -50,6 +50,16 @@ export default function IndexScreen() {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  useEffect(() => {
+    if (!selectedEvaluation) return;
+
+    const timer = setTimeout(() => {
+      setSelectedEvaluation(null);
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [selectedEvaluation]);
+
   // 场景切换
   const handleSelectScene = (scene: Scene) => {
     setSelectedScene(scene);
@@ -208,6 +218,8 @@ export default function IndexScreen() {
 
       const updatedMessages = [...messages, userMsg];
       setMessages(updatedMessages);
+      setInputText(userText);
+      setSelectedEvaluation(evalRes ?? null);
 
       // 4. 获取 AI 回复
       const response = await replyToDialogue({

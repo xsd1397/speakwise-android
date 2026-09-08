@@ -26,7 +26,7 @@ const config: ExpoConfig = {
   ],
   experiments: { typedRoutes: true },
   extra: {
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL ?? "https://speakwise-wsicpu2u.manus.space",
     eas: {
       projectId: "cadf963b-9d15-4717-b951-c6d4dca961fa",
     },

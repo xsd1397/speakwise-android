@@ -1,8 +1,11 @@
+export const STATIC_API_BASE_URL = "https://speakwise-wsicpu2u.manus.space";
+
 export type DialogueMessage = {
   id?: string;
   role: "user" | "assistant";
   text: string;
   translation?: string;
+  correction?: string;
   timestamp?: number | Date;
   evaluation?: EvaluationResult;
   [key: string]: any;
@@ -12,18 +15,33 @@ export type EvaluationResult = {
   score?: number;
   overallScore?: number;
   feedback?: string;
+  transcript?: string;
+  note?: string;
   grammar?: string[];
   pronunciation?: string[];
   vocabulary?: string[];
+  suggestions?: string[];
+  [key: string]: any;
+};
+
+export type SuggestionsResponse = {
+  suggestions?: string[];
+  note?: string;
+  [key: string]: any;
+};
+
+export type PreflightResult = {
+  ok?: boolean;
+  message?: string;
   [key: string]: any;
 };
 
 export const getApiBaseUrl = (): string => {
-  return process.env.EXPO_PUBLIC_API_URL || "https://speakwise-wsicpu2u.manus.space";
+  return process.env.EXPO_PUBLIC_API_BASE_URL || process.env.EXPO_PUBLIC_API_URL || STATIC_API_BASE_URL;
 };
 
 async function callTrpcMutation<T>(path: string, inputData: Record<string, any>): Promise<T> {
-  const baseUrl = getApiBaseUrl();
+  const baseUrl = getApiBaseUrl().replace(/\/$/, "");
   const url = `${baseUrl}/api/trpc/${path}?batch=1`;
 
   const response = await fetch(url, {
@@ -46,6 +64,35 @@ async function callTrpcMutation<T>(path: string, inputData: Record<string, any>)
   return data as T;
 }
 
+async function callTrpcMutationWithFallbacks<T>(paths: string[], inputData: Record<string, any>): Promise<T> {
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      return await callTrpcMutation<T>(path, inputData);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("tRPC call failed");
+}
+
+function normalizeEvaluationResult(raw: any): EvaluationResult {
+  if (!raw || typeof raw !== "object") {
+    return { score: 85, overallScore: 85, feedback: "Good effort!" };
+  }
+
+  const score = raw.score ?? raw.overallScore ?? raw.totalScore ?? 85;
+  return {
+    ...raw,
+    score,
+    overallScore: raw.overallScore ?? score,
+    feedback: raw.feedback ?? raw.note ?? "Good effort!",
+    transcript: raw.transcript ?? raw.text ?? raw.sentence ?? "",
+  };
+}
+
 export async function fetchDialogueSuggestions(params: {
   level: string;
   scene: string;
@@ -53,16 +100,33 @@ export async function fetchDialogueSuggestions(params: {
   aiMessage: string;
 }) {
   try {
-    const res = await callTrpcMutation<any>("dialogue.suggestions", {
+    const res = await callTrpcMutationWithFallbacks<any>(["dialogue.suggestions", "voice.suggestions"], {
       level: params.level || "beginner",
       scene: params.scene || "greetings",
       history: params.history || [],
       aiMessage: params.aiMessage,
     });
-    return res?.suggestions || [];
+
+    const suggestions =
+      res?.suggestions ??
+      res?.items ??
+      res?.data?.suggestions ??
+      res?.result?.data?.json?.suggestions ??
+      [];
+
+    return Array.isArray(suggestions) ? suggestions : [];
   } catch (err) {
     return [];
   }
+}
+
+export async function getReplySuggestions(params: {
+  level: string;
+  scene: string;
+  history: Array<{ role: "user" | "assistant"; text: string }>;
+  aiMessage: string;
+}) {
+  return fetchDialogueSuggestions(params);
 }
 
 export async function replyToDialogue(params: {
@@ -72,12 +136,17 @@ export async function replyToDialogue(params: {
   userMessage: string;
 }) {
   try {
-    const res = await callTrpcMutation<any>("dialogue.reply", {
+    const res = await callTrpcMutationWithFallbacks<any>(["dialogue.reply", "voice.reply"], {
       level: params.level || "beginner",
       scene: params.scene || "greetings",
       history: params.history || [],
       userMessage: params.userMessage,
     });
+
+    if (res?.reply || res?.message) {
+      return { reply: res.reply || res.message };
+    }
+
     return res || { reply: "" };
   } catch (err) {
     console.error("replyToDialogue error:", err);
@@ -88,13 +157,23 @@ export async function replyToDialogue(params: {
 export async function transcribeRecording(params: {
   audioBase64: string;
   mimeType?: string;
+  targetSentence?: string;
+  language?: string;
 }) {
   try {
-    const res = await callTrpcMutation<any>("audio.transcribe", {
+    const res = await callTrpcMutationWithFallbacks<any>(["voice.transcribe", "audio.transcribe"], {
       audioBase64: params.audioBase64,
       mimeType: params.mimeType || "audio/m4a",
+      targetSentence: params.targetSentence,
+      language: params.language || "en",
     });
-    return res || { text: "" };
+
+    if (res && typeof res === "object") {
+      const text = res.text ?? res.transcript ?? res.result ?? "";
+      return { ...res, text };
+    }
+
+    return { text: "" };
   } catch (err) {
     console.error("transcribeRecording error:", err);
     throw err;
@@ -105,18 +184,26 @@ export async function evaluateRecording(params: {
   text: string;
   audioBase64?: string;
   targetText?: string;
+  targetSentence?: string;
+  mimeType?: string;
+  language?: string;
   level?: string;
   scene?: string;
 }): Promise<EvaluationResult> {
   try {
-    const res = await callTrpcMutation<any>("dialogue.evaluate", {
+    const targetSentence = params.targetText ?? params.targetSentence ?? params.text;
+    const res = await callTrpcMutationWithFallbacks<any>(["voice.evaluate", "dialogue.evaluate"], {
       text: params.text,
       audioBase64: params.audioBase64,
-      targetText: params.targetText,
+      targetText: targetSentence,
+      targetSentence,
+      mimeType: params.mimeType || "audio/m4a",
+      language: params.language || "en",
       level: params.level || "beginner",
       scene: params.scene || "greetings",
     });
-    return res || { score: 85, overallScore: 85, feedback: "Good effort!" };
+
+    return normalizeEvaluationResult(res);
   } catch (err) {
     console.error("evaluateRecording error:", err);
     throw err;
