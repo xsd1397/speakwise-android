@@ -1,4 +1,4 @@
-{
+﻿{
   "expo": {
     "name": "SpeakWise",
     "slug": "speakwise",
@@ -8,9 +8,9 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/android-icon-background.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#061B46"
+      "image": "./assets/images/android-icon-foreground.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#061121"
     },
     "ios": {
       "supportsTablet": true

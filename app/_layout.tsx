@@ -27,7 +27,7 @@ export default function RootLayout() {
     return (
       <View style={styles.container}>
         <Image
-          source={require('../assets/images/android-icon-background.png')}
+          source={require('../assets/images/splash-screen-deep-blue.png')}
           style={StyleSheet.absoluteFill}
           resizeMode="cover"
         />
