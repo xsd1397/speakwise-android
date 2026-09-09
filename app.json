@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "SpeakWise",
     "slug": "speakwise",
@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/images/android-icon-background.png",
       "resizeMode": "cover",
-      "backgroundColor": "#061121"
+      "backgroundColor": "#061B46"
     },
     "ios": {
       "supportsTablet": true
