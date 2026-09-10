@@ -354,7 +354,7 @@ export default function IndexScreen() {
     <SafeAreaView style={styles.container}>
       {/* 头部 */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SpeakWise AI Coach</Text>
+        <Text style={styles.headerTitle}>AI 助手</Text>
       </View>
 
       {/* 场景选择 */}
@@ -528,7 +528,7 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0B0C0F" },
   header: { paddingHorizontal: 20, paddingVertical: 12, backgroundColor: "#111317", borderBottomWidth: 1, borderBottomColor: "#292C33" },
-  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#F2F3F5" },
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#F2F3F5", textAlign: "center" },
   scenesContainer: { maxHeight: 60, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "#111317", borderBottomWidth: 1, borderBottomColor: "#292C33" },
   sceneChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: "#162A57", marginRight: 8, height: 36, justifyContent: "center" },
   sceneChipActive: { backgroundColor: "#2F6BEB" },

@@ -30,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "口语练习",
+          title: "AI口语练习",
           tabBarIcon: ({ color }) => <SymbolView name={icons.practice} tintColor={color} size={22} />,
         }}
       />
