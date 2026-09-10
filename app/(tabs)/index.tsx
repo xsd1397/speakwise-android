@@ -460,14 +460,26 @@ export default function IndexScreen() {
                 activeSuggestionIndex === idx && styles.suggestionCardActive,
               ]}
             >
-              <TouchableOpacity
-                style={styles.suggestionChip}
-                onPress={() => handleSendMessage(suggestion.english)}
-                accessibilityLabel={`发送提示${idx + 1}`}
-              >
-                <Text style={styles.suggestionText}>{suggestion.english}</Text>
-                <Text style={styles.suggestionTranslation}>{suggestion.chinese}</Text>
-              </TouchableOpacity>
+              <View style={styles.suggestionRow}>
+                <TouchableOpacity
+                  style={styles.suggestionChip}
+                  onPress={() => handleSendMessage(suggestion.english)}
+                  accessibilityLabel={`发送提示${idx + 1}`}
+                >
+                  <Text style={styles.suggestionText}>{suggestion.english}</Text>
+                  <Text style={styles.suggestionTranslation}>{suggestion.chinese}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.suggestionSpeakButton}
+                  onPress={() => {
+                    Speech.stop();
+                    Speech.speak(suggestion.english, { language: "en-US" });
+                  }}
+                  accessibilityLabel={`播放提示${idx + 1}`}
+                >
+                  <Text style={styles.suggestionSpeakButtonText}>🔊 语音</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))}
         </ScrollView>
@@ -552,9 +564,12 @@ const styles = StyleSheet.create({
   suggestionsContent: { paddingHorizontal: 16 },
   suggestionCard: { justifyContent: "center", paddingVertical: 8, paddingHorizontal: 4 },
   suggestionCardActive: { transform: [{ scale: 1.02 }] },
-  suggestionChip: { backgroundColor: "#162A57", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: "#3A5FAF" },
+  suggestionRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  suggestionChip: { flex: 1, backgroundColor: "#162A57", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1, borderColor: "#3A5FAF" },
   suggestionText: { fontSize: 15, lineHeight: 22, color: "#F2F3F5", fontWeight: "600" },
   suggestionTranslation: { color: "#B8C7E8", fontSize: 14, lineHeight: 21, marginTop: 4 },
+  suggestionSpeakButton: { backgroundColor: "#2F6BEB", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minWidth: 80, alignItems: "center" },
+  suggestionSpeakButtonText: { fontSize: 12, color: "#F2F3F5", fontWeight: "600" },
   inputContainer: { flexDirection: "row", padding: 12, backgroundColor: "#111317", borderTopWidth: 1, borderTopColor: "#292C33", alignItems: "center" },
   micButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#162A57", justifyContent: "center", alignItems: "center", marginRight: 8 },
   micButtonRecording: { backgroundColor: "#5B2632" },
