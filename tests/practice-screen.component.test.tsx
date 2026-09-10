@@ -52,7 +52,7 @@ describe("PracticeScreen", () => {
     const { getByText, getByLabelText } = render(<IndexScreen />);
 
     // 验证页面主标题渲染
-    expect(getByText("SpeakWise AI Coach")).toBeTruthy();
+    expect(getByText("AI 助手")).toBeTruthy();
 
     // 验证场景列表中所有 Scene 标题渲染
     SCENES.forEach((scene) => {
