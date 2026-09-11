@@ -21,7 +21,12 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "splash": {
+        "image": "./assets/images/splash-screen-deep-blue.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#061B46"
+      }
     },
     "web": {
       "bundler": "metro",
@@ -35,7 +40,9 @@
         {
           "image": "./assets/images/splash-screen-deep-blue.png",
           "resizeMode": "cover",
-          "backgroundColor": "#061B46"
+          "backgroundColor": "#061B46",
+          "imageWidth": 1280,
+          "imageHeight": 720
         }
       ],
       "expo-audio"
